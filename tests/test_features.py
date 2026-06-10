@@ -40,6 +40,9 @@ def test_no_current_day_leakage():
     r1 = f1[(f1["id"] == "A_CA_1") & (f1["d_int"] == 50)][lag_cols]
     r2 = f2[(f2["id"] == "A_CA_1") & (f2["d_int"] == 50)][lag_cols]
     pd.testing.assert_frame_equal(r1.reset_index(drop=True), r2.reset_index(drop=True))
+    # the day-50 spike IS visible at day 57's lag_7 in the spiked frame
+    a2 = f2[(f2["id"] == "A_CA_1") & (f2["d_int"] == 57)]
+    assert a2["lag_7"].values[0] == 9999
 
 
 def test_nan_lag_rows_dropped():
@@ -52,7 +55,7 @@ def test_price_change_7d():
     df = add_features(make_long_df())
     a = df[df["id"] == "A_CA_1"].set_index("d_int")
     expected = (1.0 + 0.01 * 50) / (1.0 + 0.01 * 43) - 1
-    assert abs(a.loc[50, "price_change_7d"] - expected) < 1e-5
+    assert abs(a.loc[50, "price_change_7d"] - expected) < 1e-6
 
 
 def test_categoricals_encoded():

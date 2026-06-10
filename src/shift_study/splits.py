@@ -11,8 +11,8 @@ COLD_START_MAX_NONZERO = 30
 
 def e1_split(df: pd.DataFrame, seed: int = 42, test_frac: float = 0.2,
              val_frac: float = 0.1):
-    """Random 80/20 split over ALL rows (leakage by design — Delta denominator).
-    A random val_frac of the remainder is held out for early stopping."""
+    """Random 70/10/20 split (train/val/test) over ALL rows (temporal leakage by design —
+    E1 is the Delta denominator)."""
     rng = np.random.default_rng(seed)
     idx = rng.permutation(len(df))
     n_test = int(len(df) * test_frac)
@@ -29,7 +29,10 @@ def e2_split(df: pd.DataFrame):
     train = df[df["d_int"] < VAL_START]
     val = df[(df["d_int"] >= VAL_START) & (df["d_int"] <= TRAIN_END)]
     test = df[df["d_int"] >= TEST_START]
-    assert test["d_int"].min() > train["d_int"].max()
+    if not train.empty and not test.empty:
+        assert test["d_int"].min() > train["d_int"].max(), (
+            f"Leakage: test min={test['d_int'].min()} <= train max={train['d_int'].max()}"
+        )
     return train, val, test
 
 
@@ -47,4 +50,7 @@ def e3_split(df: pd.DataFrame):
     """E2 split restricted to cold-start items."""
     ids = cold_start_ids(df)
     sub = df[df["id"].isin(ids)]
+    if sub.empty:
+        empty = sub.iloc[0:0]
+        return empty, empty, empty
     return e2_split(sub)

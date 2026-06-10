@@ -29,7 +29,9 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     """Input: long base table (one row per id per day) sorted arbitrarily.
     Output: feature table with NaN-lag rows dropped. Requires columns:
     id, item_id..state_id, d_int, sales, date, wm_yr_wk, wday, month,
-    event_type_1, snap, sell_price."""
+    event_type_1, snap, sell_price.
+    Requires exactly one row per (id, d_int) with no missing days within each
+    series (positional shifts assume gapless daily data)."""
     df = df.sort_values(["id", "d_int"]).reset_index(drop=True)
     g = df.groupby("id", observed=True)[TARGET]
     for l in LAGS:
@@ -58,6 +60,7 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # drop rows where lags are undefined (series start); fill benign price NaNs
+    # lag_35 is the binding constraint; roll_std_28 included defensively
     df = df.dropna(subset=[f"lag_{l}" for l in LAGS] + ["roll_std_28"]).copy()
     df["price_change_7d"] = df["price_change_7d"].fillna(0.0)
     df["price_momentum_28"] = df["price_momentum_28"].fillna(0.0)

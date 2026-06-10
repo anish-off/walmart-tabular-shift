@@ -54,3 +54,10 @@ def test_e3_only_cold_items():
     for part in (tr, va, te):
         assert set(part["id"].unique()) <= {"cold"}
     assert te["d_int"].min() >= TEST_START
+
+
+def test_e3_empty_when_no_cold_items():
+    df = make_df()
+    df = df[df["id"] != "cold"]  # only hot items remain
+    tr, va, te = e3_split(df)
+    assert tr.empty and va.empty and te.empty
