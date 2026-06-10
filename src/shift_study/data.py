@@ -35,13 +35,9 @@ def merge_all(long: pd.DataFrame, calendar: pd.DataFrame,
     calendar["d_int"] = calendar["d"].str.slice(2).astype(np.int16)
     calendar = calendar.drop(columns=["d"])
     df = long.merge(calendar, on="d_int", how="left")
-    # align dtypes for merge keys: cast categorical columns to str/object so
-    # they join correctly against plain-object prices columns
-    df = df.copy()
-    for col in ["store_id", "item_id"]:
-        if hasattr(df[col], "cat"):
-            df[col] = df[col].astype(str)
     df = df.merge(prices, on=["store_id", "item_id", "wm_yr_wk"], how="left")
+    for col in ["store_id", "item_id"]:
+        df[col] = df[col].astype("category")
     df = df[df["sell_price"].notna()]  # rows before product release
     snap = np.select(
         [df["state_id"] == "CA", df["state_id"] == "TX", df["state_id"] == "WI"],

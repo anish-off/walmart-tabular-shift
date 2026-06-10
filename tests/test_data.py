@@ -42,6 +42,8 @@ def test_merge_adds_calendar_price_and_snap():
     b2 = df[(df["id"] == "B_TX_1_evaluation") & (df["d_int"] == 2)].iloc[0]
     assert b2["snap"] == 1          # snap_TX on d_2 is 1
     assert "wday" in df.columns and "wm_yr_wk" in df.columns
+    assert isinstance(df["store_id"].dtype, pd.CategoricalDtype)
+    assert isinstance(df["item_id"].dtype, pd.CategoricalDtype)
 
 
 def test_merge_drops_rows_without_price():
