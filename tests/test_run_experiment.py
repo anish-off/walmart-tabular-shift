@@ -41,3 +41,7 @@ def test_runner_e2_lightgbm(tmp_path):
     assert payload["experiment"] == "e2"
     assert payload["wape_mean"] > 0
     assert (out / "lightgbm_e2_items.parquet").exists()
+    # wape_ensemble must be present and positive
+    assert payload["wape_ensemble"] > 0
+    # lightgbm uses a single seed, so ensemble == per-seed mean
+    assert payload["wape_ensemble"] == pytest.approx(payload["wape_mean"], rel=1e-6)

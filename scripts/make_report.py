@@ -133,7 +133,9 @@ def main():
                           "leakage before reporting (see plan, Common Pitfalls).**", ""]
     if not wt.empty:
         lines += ["## Wilcoxon signed-rank (per-item WAPE)", "",
-                  wt.to_markdown(index=False, floatfmt=".4g"), ""]
+                  wt.to_markdown(index=False, floatfmt=".4g"), "",
+                  "> **Note:** p-values are uncorrected; apply Holm/Bonferroni before "
+                  "claiming significance across the 30 comparisons.", ""]
     lines += ["## Figures", "", "![fig1](fig1_shift_sensitivity.png)", "",
               "![fig2](fig2_crossover.png)", ""]
     (out / "report.md").write_text("\n".join(lines), encoding="utf-8")

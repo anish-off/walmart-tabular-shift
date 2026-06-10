@@ -29,13 +29,16 @@ def main():
     args = ap.parse_args()
 
     t0 = time.time()
-    df = pd.read_parquet(args.features)
+    df = pd.read_parquet(args.features, columns=["id", "d_int", "sales"] + FEATURES)
     if args.sample is not None:
         rng = np.random.default_rng(0)
         ids = df["id"].unique()
         df = df[df["id"].isin(rng.choice(ids, min(args.sample, len(ids)), replace=False))]
 
     train, val, test = e2_split(df)
+    # Buckets are defined by post-NaN-drop training *row counts* (a history-size
+    # proxy).  This is distinct from the cold-start *nonzero-day* definition used
+    # in splits.py::cold_start_ids, which counts unique days with sales > 0.
     hist = train.groupby("id", observed=True).size()
     buckets = {}
     for edge_lo, edge_hi in zip([0] + BUCKET_EDGES[:-1], BUCKET_EDGES):

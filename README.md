@@ -30,14 +30,17 @@ pytest -q                                         # unit tests
 # smoke test first:
 python scripts/run_experiment.py --model lightgbm --experiment e2 --sample 500
 
-# full study:
+# full study (--skip-existing makes it safe to rerun after a crash; completed cells are skipped):
 for m in xgboost lightgbm tabpfn tabm tabr; do
-  for e in e1 e2 e3; do python scripts/run_experiment.py --model $m --experiment $e; done
+  for e in e1 e2 e3; do python scripts/run_experiment.py --model $m --experiment $e --skip-existing; done
 done
 
 python scripts/run_crossover.py
 python scripts/make_report.py
 ```
+
+> **Note:** all scripts expect to be run from the repository root so that
+> `configs/*.yaml` relative paths resolve correctly.
 
 ### Optional: hyperparameter tuning (E2 validation window only — test never touched)
 

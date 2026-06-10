@@ -3,6 +3,18 @@
 Writes the best params back into configs/{model}.yaml (backup kept as .bak).
 
   python scripts/tune.py --model lightgbm --trials 30 --sample 3000
+
+Notes
+-----
+The Optuna objective is evaluated on the *same* validation window used for
+early stopping, so the reported val WAPE is optimistically biased.  This is
+intentional: the bias is consistent across trials and makes tuning a fair
+ranking problem.  The tuned params should still be validated on held-out test
+data in the final run_experiment step.
+
+The ``n_estimators`` / ``max_epochs`` values in ``search_space`` are fixed
+tuning budgets (deliberately capped for trial speed) and differ from the
+values set in the final-run configs/*.yaml files.
 """
 import argparse
 import shutil
@@ -74,7 +86,7 @@ def main():
                     help="tune on N series for speed")
     args = ap.parse_args()
 
-    df = pd.read_parquet(args.features)
+    df = pd.read_parquet(args.features, columns=["id", "d_int", "sales"] + FEATURES)
     if args.sample is not None:
         rng = np.random.default_rng(0)
         ids = df["id"].unique()

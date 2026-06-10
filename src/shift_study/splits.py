@@ -30,9 +30,10 @@ def e2_split(df: pd.DataFrame):
     val = df[(df["d_int"] >= VAL_START) & (df["d_int"] <= TRAIN_END)]
     test = df[df["d_int"] >= TEST_START]
     if not train.empty and not test.empty:
-        assert test["d_int"].min() > train["d_int"].max(), (
-            f"Leakage: test min={test['d_int'].min()} <= train max={train['d_int'].max()}"
-        )
+        if not (test["d_int"].min() > train["d_int"].max()):
+            raise RuntimeError(
+                f"Leakage: test min={test['d_int'].min()} <= train max={train['d_int'].max()}"
+            )
     return train, val, test
 
 
