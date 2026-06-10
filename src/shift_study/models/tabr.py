@@ -90,6 +90,7 @@ class TabRModel(TabularModel):
         p = self.params
         device = p.get("device", "cuda") if torch.cuda.is_available() else "cpu"
         torch.manual_seed(self.seed)
+        torch.cuda.manual_seed_all(self.seed)
         rng = np.random.default_rng(self.seed)
 
         # candidate subsample (plan: 500K max)

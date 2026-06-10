@@ -58,6 +58,7 @@ class TabMModel(TabularModel):
         p = self.params
         device = p.get("device", "cuda") if torch.cuda.is_available() else "cpu"
         torch.manual_seed(self.seed)
+        torch.cuda.manual_seed_all(self.seed)
         np.random.seed(self.seed)
 
         self.prep = Preprocessor().fit(X)

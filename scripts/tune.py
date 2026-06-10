@@ -102,7 +102,8 @@ def main():
         m.fit(X_tr, y_tr, X_va, y_va)
         return wape(y_va, m.predict(X_va))
 
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(direction="minimize",
+                                sampler=optuna.samplers.TPESampler(seed=42))
     study.optimize(objective, n_trials=args.trials)
     print("Best val WAPE:", study.best_value)
     print("Best params:", study.best_params)
