@@ -1,6 +1,10 @@
 import numpy as np
 import pandas as pd
 import pytest
+
+pytest.importorskip("xgboost")
+pytest.importorskip("lightgbm")
+
 from shift_study.metrics import wape
 from shift_study.models.base import get_model
 
@@ -33,3 +37,18 @@ def test_tree_models_learn(name, params):
 def test_get_model_unknown_raises():
     with pytest.raises(ValueError, match="Unknown model"):
         get_model("nope", {})
+
+
+def test_predict_before_fit_raises():
+    m = get_model("lightgbm", {"params": {"verbosity": -1}})
+    with pytest.raises(RuntimeError, match="fit"):
+        m.predict(pd.DataFrame({"f1": [1.0]}))
+
+
+def test_config_n_jobs_does_not_crash():
+    X, y = synth(600)
+    m = get_model("lightgbm", {"params": {"objective": "regression_l1", "n_estimators": 20,
+                                          "num_leaves": 15, "verbosity": -1, "n_jobs": 2},
+                               "early_stopping_rounds": 5}, seed=1)
+    m.fit(X[:400], y[:400], X[400:500], y[400:500])
+    assert len(m.predict(X[500:])) == 100

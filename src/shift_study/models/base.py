@@ -1,5 +1,8 @@
 """Common model interface. Every model: fit(X, y, X_val, y_val) / predict(X).
-X is a DataFrame of the shared FEATURES columns (all numeric)."""
+X is a DataFrame of the shared FEATURES columns (all numeric).
+
+Runners always call fit(X, y, X_val, y_val) with four positional args; models
+that don't use validation data (e.g. TabPFN) receive and ignore it."""
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -13,6 +16,7 @@ class TabularModel(ABC):
         self.config = config
         self.params = dict(config.get("params", {}))
         self.seed = seed
+        self.model = None
 
     @abstractmethod
     def fit(self, X: pd.DataFrame, y: np.ndarray,

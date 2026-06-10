@@ -9,7 +9,7 @@ from .base import TabularModel
 class TabPFNModel(TabularModel):
     name = "tabpfn"
 
-    def fit(self, X, y, X_val=None, y_val=None):
+    def fit(self, X, y, X_val, y_val):  # X_val/y_val unused; TabPFN is in-context
         from tabpfn import TabPFNRegressor
 
         n_ctx = int(self.params.get("context_rows", 8000))
@@ -28,6 +28,10 @@ class TabPFNModel(TabularModel):
         return self
 
     def predict(self, X) -> np.ndarray:
+        if self.model is None:
+            raise RuntimeError("Call fit() before predict()")
+        if len(X) == 0:
+            return np.empty(0, dtype=np.float64)
         chunk = int(self.params.get("predict_chunk", 50000))
         out = []
         for start in range(0, len(X), chunk):
