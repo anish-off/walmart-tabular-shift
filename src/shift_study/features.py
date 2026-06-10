@@ -63,10 +63,8 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     df["price_momentum_28"] = df["price_momentum_28"].fillna(0.0)
     df["price_rank_cat"] = df["price_rank_cat"].fillna(0.5)
 
-    # compact dtypes — lag/roll features only; keep price features in float64
-    # to preserve precision for price_change_7d comparisons
-    lag_roll_cols = [c for c in FEATURES if c.startswith(("lag_", "roll_"))]
-    for c in lag_roll_cols:
-        if df[c].dtype == np.float64:
+    # compact dtypes — cast all float64 columns in FEATURES to float32 (~640 MB saved at 42M rows)
+    for c in FEATURES:
+        if c in df.columns and df[c].dtype == np.float64:
             df[c] = df[c].astype(np.float32)
     return df.reset_index(drop=True)

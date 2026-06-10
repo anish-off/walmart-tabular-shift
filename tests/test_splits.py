@@ -24,6 +24,8 @@ def test_e1_disjoint_and_proportions():
     assert len(tr) + len(va) + len(te) == len(df)
     assert set(tr.index).isdisjoint(te.index) and set(tr.index).isdisjoint(va.index)
     assert abs(len(te) / len(df) - 0.2) < 0.01
+    assert abs(len(va) / len(df) - 0.1) < 0.01
+    assert set(va.index).isdisjoint(te.index)
 
 
 def test_e1_deterministic():

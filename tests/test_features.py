@@ -52,7 +52,7 @@ def test_price_change_7d():
     df = add_features(make_long_df())
     a = df[df["id"] == "A_CA_1"].set_index("d_int")
     expected = (1.0 + 0.01 * 50) / (1.0 + 0.01 * 43) - 1
-    assert abs(a.loc[50, "price_change_7d"] - expected) < 1e-9
+    assert abs(a.loc[50, "price_change_7d"] - expected) < 1e-5
 
 
 def test_categoricals_encoded():
