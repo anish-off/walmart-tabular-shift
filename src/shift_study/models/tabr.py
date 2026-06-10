@@ -6,7 +6,12 @@ head(h + sum_i softmax(sim)_i * v_i).
 M5-scale concessions from the plan: candidates = 500K-row training subsample,
 candidate keys frozen after `context_freeze_epoch` epochs, chunked top-m search.
 Self-retrieval is masked during training (a training row must not retrieve its
-own label)."""
+own label).
+
+Gradient note: chunked_topm is used only for top-m *index selection* (run under
+no_grad for speed). Attention logits (sims_live) are recomputed from the selected
+candidate keys and the live k_x WITH gradient, so the encoder and key network
+are fully trained through the retrieval attention path."""
 import numpy as np
 import torch
 import torch.nn as nn
@@ -117,6 +122,9 @@ class TabRModel(TabularModel):
         n = len(xn)
         frozen_keys = None
 
+        # Hoist label tensor to device once; index per batch with y_dev[idx].
+        y_dev = y_t.to(device)
+
         for epoch in range(int(p.get("max_epochs", 100))):
             # candidate keys: recomputed each epoch until frozen
             if frozen_keys is None or epoch < freeze_at:
@@ -131,15 +139,18 @@ class TabRModel(TabularModel):
             for s in range(0, n, bs):
                 b = perm[s:s + bs]
                 xb_n, xb_c = xn[b].to(device), xc[b].to(device)
-                yb = y_t[b].to(device)
+                yb = y_dev[b]
                 h = self.net.encode(xb_n, xb_c)
                 kx = self.net.key(h)
+                # Use no_grad only for top-m index selection; recompute logits
+                # with gradient so the key network is trained via the attention path.
                 with torch.no_grad():
-                    sims, idx = chunked_topm(kx.detach(), cand_keys, self.m,
-                                             self.chunk, exclude=b.to(device))
-                sel_keys = cand_keys[idx]                  # (B, m, d) frozen
-                sel_y = y_t.to(device)[idx]
-                pred = self.net.forward_with_context(h, sel_keys, sel_y, sims)
+                    _, idx = chunked_topm(kx.detach(), cand_keys, self.m,
+                                         self.chunk, exclude=b.to(device))
+                sel_keys = cand_keys[idx]                  # (B, m, d), no grad
+                sel_y = y_dev[idx]
+                sims_live = -((sel_keys - kx.unsqueeze(1)) ** 2).sum(-1)  # grad via kx
+                pred = self.net.forward_with_context(h, sel_keys, sel_y, sims_live)
                 loss = (pred - yb).abs().mean()
                 opt.zero_grad()
                 loss.backward()
@@ -155,9 +166,14 @@ class TabRModel(TabularModel):
             if stopper.step(val_mae, self.net):
                 break
         stopper.restore(self.net)
-        # final frozen candidate state for inference (y_t is already normalized)
-        with torch.no_grad():
-            self.cand_keys = self._all_keys(xn, xc, device, bs)
+        # Val MAE was measured against frozen_keys, so deploy those same keys for
+        # inference; only recompute via _all_keys when training never reached the
+        # freeze epoch (frozen_keys is None).
+        if frozen_keys is not None:
+            self.cand_keys = frozen_keys
+        else:
+            with torch.no_grad():
+                self.cand_keys = self._all_keys(xn, xc, device, bs)
         self.cand_y = y_t  # normalized training labels
         self.device, self.bs = device, bs
         self.model = self.net
@@ -171,14 +187,20 @@ class TabRModel(TabularModel):
         return torch.cat(keys)
 
     def _predict_from(self, xn, xc, cand_keys, cand_y, device, bs):
+        if len(xn) == 0:
+            return torch.zeros(0)
         out = []
         cand_y_dev = cand_y.to(device)
         for s in range(0, len(xn), bs):
             h = self.net.encode(xn[s:s + bs].to(device), xc[s:s + bs].to(device))
             kx = self.net.key(h)
-            sims, idx = chunked_topm(kx, cand_keys, self.m, self.chunk)
+            # Recompute sims on selected candidates with the same formula as training
+            # (-Σ(k_i - k_x)^2 == -cdist^2), ensuring train/eval consistency.
+            _, idx = chunked_topm(kx, cand_keys, self.m, self.chunk)
+            sel_keys = cand_keys[idx]
+            sims_live = -((sel_keys - kx.unsqueeze(1)) ** 2).sum(-1)
             out.append(self.net.forward_with_context(
-                h, cand_keys[idx], cand_y_dev[idx], sims))
+                h, sel_keys, cand_y_dev[idx], sims_live))
         return torch.cat(out)
 
     @torch.no_grad()

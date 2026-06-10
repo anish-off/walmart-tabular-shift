@@ -100,10 +100,15 @@ class TabMModel(TabularModel):
         self.model = self.net  # satisfy base-class fitted marker
         return self
 
-    def _predict_tensor(self, xn, xc, bs):
+    def _predict_tensor(self, xn, xc, bs, device=None):
+        if len(xn) == 0:
+            return torch.zeros(0)
         out = []
         for s in range(0, len(xn), bs):
-            out.append(self.net(xn[s:s + bs], xc[s:s + bs]).mean(dim=1))
+            bn, bc = xn[s:s + bs], xc[s:s + bs]
+            if device is not None:
+                bn, bc = bn.to(device), bc.to(device)
+            out.append(self.net(bn, bc).mean(dim=1))
         return torch.cat(out)
 
     @torch.no_grad()
@@ -111,5 +116,8 @@ class TabMModel(TabularModel):
         if self.model is None:
             raise RuntimeError("Call fit() before predict()")
         self.net.eval()
-        xn, xc = self.prep.transform(X, self.device)
-        return self._predict_tensor(xn, xc, self.bs).cpu().numpy()
+        # Transform to CPU; _predict_tensor moves each batch to device, matching
+        # the training loop's memory pattern and avoiding putting the full test
+        # set on GPU at once.
+        xn, xc = self.prep.transform(X, "cpu")
+        return self._predict_tensor(xn, xc, self.bs, device=self.device).cpu().numpy()

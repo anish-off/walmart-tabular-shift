@@ -39,6 +39,8 @@ class Preprocessor:
         x_num = torch.tensor(num, device=device)
         if self.cat_cols:
             cat = X[self.cat_cols].to_numpy(dtype=np.int64)
+            # features.py guarantees codes >= 0; clipping only guards the upper
+            # bound (negative codes would silently collide with class 0).
             cat = np.clip(cat, 0, np.array(self.cards) - 1)
             x_cat = torch.tensor(cat, device=device)
         else:
