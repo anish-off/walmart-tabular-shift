@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from shift_study.metrics import (
-    wape, delta, shift_sensitivity, per_item_errors, wilcoxon_items,
+    wape, delta, shift_sensitivity, per_item_errors, item_wape, wilcoxon_items,
 )
 
 
@@ -45,3 +45,27 @@ def test_wilcoxon_items_detects_better_model():
     err_b = per_item_errors(ids, actual, actual + rng.normal(0, 5.0, 50))
     stat, p = wilcoxon_items(err_a, err_b)
     assert p < 0.01  # model a clearly better
+
+
+def test_item_wape_zero_actual_is_nan():
+    df = per_item_errors(["a", "b"], [10, 0], [8, 0])
+    result = item_wape(df).tolist()
+    assert result[0] == pytest.approx(0.2)
+    assert np.isnan(result[1])
+
+
+def test_delta_zero_base_is_nan():
+    assert np.isnan(delta(0.5, 0.0))
+
+
+def test_wilcoxon_items_all_tie_returns_nan():
+    err = per_item_errors(["a", "b", "c"], [10, 5, 3], [8, 4, 2])
+    stat, p = wilcoxon_items(err, err.copy())
+    assert np.isnan(stat) and np.isnan(p)
+
+
+def test_wilcoxon_items_no_overlap_returns_nan():
+    err_a = per_item_errors(["a"], [10], [8])
+    err_b = per_item_errors(["b"], [10], [8])
+    stat, p = wilcoxon_items(err_a, err_b)
+    assert np.isnan(stat) and np.isnan(p)

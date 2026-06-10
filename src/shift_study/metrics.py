@@ -16,6 +16,8 @@ def wape(y_true, y_pred) -> float:
 
 def delta(wape_shift: float, wape_base: float) -> float:
     """Shift degradation: (WAPE_shift / WAPE_base) - 1."""
+    if wape_base == 0:
+        return float("nan")
     return float(wape_shift / wape_base - 1.0)
 
 
@@ -50,10 +52,18 @@ def item_wape(per_item: pd.DataFrame) -> pd.Series:
 
 
 def wilcoxon_items(err_a: pd.DataFrame, err_b: pd.DataFrame) -> tuple[float, float]:
-    """Wilcoxon signed-rank on per-item WAPE of model A vs model B."""
-    m = err_a.merge(err_b, on="id", suffixes=("_a", "_b"))
-    wa = m["sum_abs_err_a"] / m["sum_actual_a"].replace(0, np.nan)
-    wb = m["sum_abs_err_b"] / m["sum_actual_b"].replace(0, np.nan)
+    """Wilcoxon signed-rank (two-sided) on per-item WAPE of model A vs model B.
+
+    Pairs items by id, drops any item whose actual is zero in either model,
+    and drops ties (wa == wb).  Returns (nan, nan) when fewer than 2 valid
+    pairs remain (no id overlap, all ties, or all-zero actuals).
+    """
+    fa = pd.DataFrame({"id": err_a["id"], "wape": item_wape(err_a).values})
+    fb = pd.DataFrame({"id": err_b["id"], "wape": item_wape(err_b).values})
+    m = fa.merge(fb, on="id", suffixes=("_a", "_b"))
+    wa, wb = m["wape_a"], m["wape_b"]
     mask = wa.notna() & wb.notna() & (wa != wb)
+    if mask.sum() < 2:
+        return (float("nan"), float("nan"))
     stat, p = wilcoxon(wa[mask], wb[mask])
     return float(stat), float(p)
