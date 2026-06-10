@@ -21,7 +21,10 @@ def main():
         return
     cmd = ["kaggle", "competitions", "download", "-c", COMPETITION, "-p", str(out)]
     print("Running:", " ".join(cmd))
-    res = subprocess.run(cmd)
+    try:
+        res = subprocess.run(cmd)
+    except FileNotFoundError:
+        sys.exit("kaggle CLI not found — install with: pip install kaggle")
     if res.returncode != 0:
         sys.exit("kaggle download failed - is kaggle.json configured and the "
                  "competition rules accepted on the website?")

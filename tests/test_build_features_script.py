@@ -5,13 +5,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from shift_study.features import FEATURES
 
 # 3 items × 60 days is enough: lag_35 becomes valid at d_36 → min d_int == 36
 N_DAYS = 60
-N_ITEMS = 3
 
 
 def _make_mini_raw(raw_dir: Path) -> None:

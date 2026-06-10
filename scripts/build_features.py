@@ -24,17 +24,10 @@ def main():
 
     print("Adding features...")
     df = add_features(base)
-    keep_cols = ["id", "d_int", "sales", "item_id", "store_id", "cat_id"] + FEATURES
-    # deduplicate while preserving order
-    seen = set()
-    keep = []
-    for c in keep_cols:
-        if c not in seen:
-            keep.append(c)
-            seen.add(c)
-    df = df[keep]
+    df = df[["id", "d_int", "sales", "item_id", "store_id", "cat_id"] + FEATURES]
     print(f"  rows after NaN-lag drop={len(df):,}  features={len(FEATURES)}")
-    assert not df[FEATURES].isna().any().any(), "NaNs remain in feature columns"
+    if df[FEATURES].isna().any().any():
+        raise RuntimeError("NaNs remain in feature columns")
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

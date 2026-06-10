@@ -19,6 +19,7 @@ def load_raw(raw_dir: str | Path):
 
 
 def melt_sales(sales: pd.DataFrame, max_day: int = MAX_DAY) -> pd.DataFrame:
+    sales = sales.copy()
     day_cols = [f"d_{i}" for i in range(1, max_day + 1) if f"d_{i}" in sales.columns]
     for c in ID_COLS:
         sales[c] = sales[c].astype("category")
@@ -56,8 +57,10 @@ def build_base_table(raw_dir: str | Path, sample_items: int | None = None,
     """Full pipeline: raw CSVs -> merged long table. sample_items keeps a random
     subset of series for smoke tests."""
     sales, calendar, prices = load_raw(raw_dir)
-    if sample_items:
+    if sample_items is not None:
         rng = np.random.default_rng(seed)
         keep = rng.choice(len(sales), size=min(sample_items, len(sales)), replace=False)
         sales = sales.iloc[sorted(keep)].reset_index(drop=True)
-    return merge_all(melt_sales(sales), calendar, prices)
+    long = melt_sales(sales)
+    del sales  # release the wide frame (~0.5 GB at full M5) before the merges
+    return merge_all(long, calendar, prices)
