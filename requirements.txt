@@ -10,5 +10,6 @@ torch>=2.1
 optuna
 matplotlib
 pyyaml
+tabulate
 kaggle
 pytest
