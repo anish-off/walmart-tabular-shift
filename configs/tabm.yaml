@@ -1,0 +1,13 @@
+model: tabm
+seeds: [42]
+params:
+  d_main: 512
+  k: 8
+  n_blocks: 3
+  dropout: 0.0
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  batch_size: 4096
+  max_epochs: 200
+  patience: 20
+  device: cuda

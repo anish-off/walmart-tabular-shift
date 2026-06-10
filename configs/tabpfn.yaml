@@ -1,0 +1,6 @@
+model: tabpfn
+seeds: [0, 1, 2, 3, 4]
+params:
+  context_rows: 8000
+  predict_chunk: 50000
+  device: cuda
