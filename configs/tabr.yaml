@@ -1,0 +1,15 @@
+model: tabr
+seeds: [42]
+params:
+  d_main: 96
+  context_size: 96
+  dropout: 0.1
+  lr: 5.0e-4
+  weight_decay: 1.0e-5
+  batch_size: 1024
+  max_epochs: 100
+  patience: 10
+  context_freeze_epoch: 4
+  train_subsample: 500000
+  candidate_chunk: 65536
+  device: cuda

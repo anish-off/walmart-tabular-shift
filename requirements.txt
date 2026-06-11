@@ -1,0 +1,15 @@
+numpy
+pandas>=2.0
+pyarrow
+scikit-learn
+scipy
+xgboost>=2.0
+lightgbm>=4.0
+tabpfn>=2.0
+torch>=2.1
+optuna
+matplotlib
+pyyaml
+tabulate
+kaggle
+pytest

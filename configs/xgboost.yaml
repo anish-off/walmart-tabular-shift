@@ -1,0 +1,12 @@
+model: xgboost
+seeds: [42]
+early_stopping_rounds: 50
+params:
+  n_estimators: 1000
+  learning_rate: 0.05
+  max_depth: 7
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 10
+  tree_method: hist
+  objective: reg:absoluteerror
