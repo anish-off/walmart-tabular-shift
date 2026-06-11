@@ -12,3 +12,4 @@ params:
   bagging_freq: 1
   lambda_l2: 1.0
   verbosity: -1
+  device: gpu
