@@ -62,8 +62,9 @@ class TabMModel(TabularModel):
         np.random.seed(self.seed)
 
         self.prep = Preprocessor().fit(X)
-        xn, xc = self.prep.transform(X, "cpu")
-        y_t = torch.tensor(np.asarray(y, dtype=np.float32))
+        # Hoist all training data to device once; eliminates 1.5M per-batch CPU→GPU copies.
+        xn, xc = self.prep.transform(X, device)
+        y_t = torch.tensor(np.asarray(y, dtype=np.float32), device=device)
         vxn, vxc = self.prep.transform(X_val, device)
         vy = torch.tensor(np.asarray(y_val, dtype=np.float32), device=device)
 
@@ -76,17 +77,17 @@ class TabMModel(TabularModel):
                                 weight_decay=float(p.get("weight_decay", 1e-5)))
         stopper = EarlyStopper(int(p.get("patience", 20)))
         bs = int(p.get("batch_size", 4096))
+        max_epochs = int(p.get("max_epochs", 200))
+        log_every = int(p.get("log_every", 10))
 
         n = len(xn)
-        for epoch in range(int(p.get("max_epochs", 200))):
+        for epoch in range(max_epochs):
             self.net.train()
-            perm = torch.randperm(n)
+            perm = torch.randperm(n, device=device)
             for s in range(0, n, bs):
                 b = perm[s:s + bs]
-                xb_n, xb_c = xn[b].to(device), xc[b].to(device)
-                yb = y_t[b].to(device)
-                pred = self.net(xb_n, xb_c)               # (B, k)
-                loss = (pred - yb.unsqueeze(1)).abs().mean()
+                pred = self.net(xn[b], xc[b])              # (B, k)
+                loss = (pred - y_t[b].unsqueeze(1)).abs().mean()
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
@@ -94,7 +95,12 @@ class TabMModel(TabularModel):
             with torch.no_grad():
                 val_pred = self._predict_tensor(vxn, vxc, bs)
                 val_mae = (val_pred - vy).abs().mean().item()
+            if (epoch + 1) % log_every == 0:
+                print(f"  [tabm] epoch {epoch+1:3d}/{max_epochs}  val_mae={val_mae:.4f}",
+                      flush=True)
             if stopper.step(val_mae, self.net):
+                print(f"  [tabm] early stop at epoch {epoch+1}  val_mae={val_mae:.4f}",
+                      flush=True)
                 break
         stopper.restore(self.net)
         self.device, self.bs = device, bs

@@ -99,13 +99,14 @@ class TabRModel(TabularModel):
         X, y = X.iloc[sub].reset_index(drop=True), np.asarray(y)[sub]
 
         self.prep = Preprocessor().fit(X)
-        xn, xc = self.prep.transform(X, "cpu")
+        # Subsampled training set (≤500K rows) fits in VRAM; hoist once.
+        xn, xc = self.prep.transform(X, device)
         # Normalize labels so label_emb operates on O(1) scale values, not raw
         # target magnitudes that would overwhelm the feature representation h.
         y_arr = y.astype(np.float32)
         self.y_mean = float(y_arr.mean())
         self.y_std = float(y_arr.std()) + 1e-6
-        y_t = torch.tensor((y_arr - self.y_mean) / self.y_std)
+        y_t = torch.tensor((y_arr - self.y_mean) / self.y_std, device=device)
         vxn, vxc = self.prep.transform(X_val, "cpu")
         vy_norm = torch.tensor(
             (np.asarray(y_val, dtype=np.float32) - self.y_mean) / self.y_std)
@@ -120,13 +121,15 @@ class TabRModel(TabularModel):
         stopper = EarlyStopper(int(p.get("patience", 10)))
         bs = int(p.get("batch_size", 1024))
         freeze_at = int(p.get("context_freeze_epoch", 4))
+        max_epochs = int(p.get("max_epochs", 100))
+        log_every = int(p.get("log_every", 10))
         n = len(xn)
         frozen_keys = None
 
-        # Hoist label tensor to device once; index per batch with y_dev[idx].
-        y_dev = y_t.to(device)
+        # y_t is already on device; keep alias for clarity.
+        y_dev = y_t
 
-        for epoch in range(int(p.get("max_epochs", 100))):
+        for epoch in range(max_epochs):
             # candidate keys: recomputed each epoch until frozen
             if frozen_keys is None or epoch < freeze_at:
                 with torch.no_grad():
@@ -136,10 +139,10 @@ class TabRModel(TabularModel):
             cand_keys = frozen_keys if frozen_keys is not None else keys
 
             self.net.train()
-            perm = torch.randperm(n)
+            perm = torch.randperm(n, device=device)
             for s in range(0, n, bs):
                 b = perm[s:s + bs]
-                xb_n, xb_c = xn[b].to(device), xc[b].to(device)
+                xb_n, xb_c = xn[b], xc[b]
                 yb = y_dev[b]
                 h = self.net.encode(xb_n, xb_c)
                 kx = self.net.key(h)
@@ -164,7 +167,12 @@ class TabRModel(TabularModel):
                     self._all_keys(xn, xc, device, bs)
                 val_pred = self._predict_from(vxn, vxc, cand_eval, y_t, device, bs)
                 val_mae = (val_pred.cpu() - vy_norm).abs().mean().item()
+            if (epoch + 1) % log_every == 0:
+                print(f"  [tabr] epoch {epoch+1:3d}/{max_epochs}  val_mae={val_mae:.4f}",
+                      flush=True)
             if stopper.step(val_mae, self.net):
+                print(f"  [tabr] early stop at epoch {epoch+1}  val_mae={val_mae:.4f}",
+                      flush=True)
                 break
         stopper.restore(self.net)
         # Val MAE was measured against frozen_keys, so deploy those same keys for
