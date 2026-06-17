@@ -194,6 +194,7 @@ print(f"[{now_dt}] [SESSION 1] ✅ Session 1 done in {(time.time()-t0)/3600:.2f}
 # %%
 import subprocess, time, os, sys, datetime
 PROJ = os.environ["SS_PROJ"]
+env  = {**os.environ, "PYTHONPATH": f"{PROJ}/src:" + os.environ.get("PYTHONPATH", "")}
 
 t0 = time.time()
 loop_idx = 1
@@ -210,7 +211,7 @@ for exp in ["e1", "e2", "e3"]:
         "--features",   f"{PROJ}/features.parquet",
         "--out",        f"{PROJ}/results",
         "--skip-existing",
-    ], cwd=PROJ, step_name=f"SESSION_2_TABR_{exp.upper()}", check=False)
+    ], cwd=PROJ, env=env, step_name=f"SESSION_2_TABR_{exp.upper()}", check=False)
     loop_idx += 1
 
 now_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -222,17 +223,18 @@ print(f"[{now_dt}] [SESSION 2] ✅ TabR done in {(time.time()-t0)/3600:.2f} h")
 # %%
 import subprocess, os, sys
 PROJ = os.environ["SS_PROJ"]
+env  = {**os.environ, "PYTHONPATH": f"{PROJ}/src:" + os.environ.get("PYTHONPATH", "")}
 
 run_command_with_logging([
     sys.executable, f"{PROJ}/scripts/run_crossover.py",
     "--features", f"{PROJ}/features.parquet",
     "--out",      f"{PROJ}/results",
-], cwd=PROJ, step_name="RUN_CROSSOVER", check=True)
+], cwd=PROJ, env=env, step_name="RUN_CROSSOVER", check=True)
 
 run_command_with_logging([
     sys.executable, f"{PROJ}/scripts/make_report.py",
     "--results", f"{PROJ}/results",
-], cwd=PROJ, step_name="MAKE_REPORT", check=True)
+], cwd=PROJ, env=env, step_name="MAKE_REPORT", check=True)
 
 # %% [markdown]
 # ## Cell 9 — Display Results
