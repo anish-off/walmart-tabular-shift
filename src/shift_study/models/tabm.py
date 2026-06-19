@@ -128,3 +128,31 @@ class TabMModel(TabularModel):
         # set on GPU at once.
         xn, xc = self.prep.transform(X, "cpu")
         return self._predict_tensor(xn, xc, self.bs, device=self.device).cpu().numpy()
+
+    def save(self, path) -> None:
+        torch.save({
+            "state_dict": self.net.state_dict(),
+            "prep": self.prep,
+            "config": self.config,
+            "seed": self.seed,
+        }, path)
+
+    @classmethod
+    def load(cls, path) -> "TabMModel":
+        ckpt = torch.load(path, map_location="cpu")
+        obj = cls(ckpt["config"], seed=ckpt["seed"])
+        obj.prep = ckpt["prep"]
+        p = ckpt["config"].get("params", {})
+        obj.net = TabMNet(
+            n_num=len(obj.prep.num_cols), cards=obj.prep.cards,
+            d_main=int(p.get("d_main", 512)), k=int(p.get("k", 8)),
+            n_blocks=int(p.get("n_blocks", 3)), dropout=float(p.get("dropout", 0.0)),
+        )
+        obj.net.load_state_dict(ckpt["state_dict"])
+        obj.net.eval()
+        obj.model = obj.net
+        device = p.get("device", "cuda") if torch.cuda.is_available() else "cpu"
+        obj.net.to(device)
+        obj.device = device
+        obj.bs = int(p.get("batch_size", 4096))
+        return obj

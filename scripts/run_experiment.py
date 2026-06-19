@@ -83,6 +83,9 @@ def main():
     X_te, y_te = test[FEATURES], test[TARGET].to_numpy(dtype=np.float32)
     del df, train, val  # free memory before fit loop; test kept for ids
 
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
     wapes, preds = [], []
     for seed in seeds:
         model = get_model(args.model, config, seed=seed)
@@ -92,13 +95,15 @@ def main():
         print(f"  seed={seed}  WAPE={w:.4f}")
         wapes.append(w)
         preds.append(pred)
+        if args.model == "tabm" and hasattr(model, "save"):
+            ckpt_path = out / f"{stem}_seed{seed}.pt"
+            model.save(ckpt_path)
+            print(f"  [tabm] model saved -> {ckpt_path}")
 
     mean_pred = np.mean(preds, axis=0)
     wape_ensemble = float(wape(y_te, mean_pred))
     items = per_item_errors(test["id"].to_numpy(), y_te, mean_pred)
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
     payload = {
         "model": args.model,
         "experiment": args.experiment,
