@@ -118,8 +118,10 @@ def main():
                     help="[walmart] directory with M5 CSVs")
     ap.add_argument("--csv",
                     help="[generic] path to your retail CSV")
-    ap.add_argument("--out", default="predictions.csv",
-                    help="output CSV with a 'pred' column")
+    ap.add_argument("--out", default="predictions.parquet",
+                    help="output file (.parquet recommended)")
+    ap.add_argument("--test-only", action="store_true",
+                    help="only predict on E2 test rows (d >= 1522) — much smaller output")
     args = ap.parse_args()
 
     if args.format == "walmart":
@@ -132,6 +134,12 @@ def main():
     # load model
     print(f"\nLoading model from {args.model_path} ...")
     model = TabMModel.load(args.model_path)
+
+    # optionally restrict to test window only
+    if args.test_only:
+        from shift_study.splits import TEST_START
+        df = df[df["d_int"] >= TEST_START].reset_index(drop=True)
+        print(f"  (--test-only) restricted to d >= {TEST_START}: {len(df):,} rows")
 
     # predict
     print("Running predictions...")
@@ -147,8 +155,13 @@ def main():
         print(f"\nWAPE = {wape:.4f}")
     out_df["pred"] = preds
 
-    out_df.to_csv(args.out, index=False)
-    print(f"Predictions saved -> {args.out}  ({len(out_df):,} rows)")
+    out_path = Path(args.out)
+    if out_path.suffix == ".csv":
+        out_path = out_path.with_suffix(".parquet")
+        print(f"  (saving as parquet to save disk space — {args.out} → {out_path})")
+    out_df.to_parquet(out_path, index=False)
+    print(f"Predictions saved -> {out_path}  ({len(out_df):,} rows, "
+          f"{out_path.stat().st_size / 1e6:.0f} MB)")
 
 
 if __name__ == "__main__":
