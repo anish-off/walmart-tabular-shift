@@ -139,7 +139,7 @@ class TabMModel(TabularModel):
 
     @classmethod
     def load(cls, path) -> "TabMModel":
-        ckpt = torch.load(path, map_location="cpu")
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
         obj = cls(ckpt["config"], seed=ckpt["seed"])
         obj.prep = ckpt["prep"]
         p = ckpt["config"].get("params", {})
@@ -148,7 +148,8 @@ class TabMModel(TabularModel):
             d_main=int(p.get("d_main", 512)), k=int(p.get("k", 8)),
             n_blocks=int(p.get("n_blocks", 3)), dropout=float(p.get("dropout", 0.0)),
         )
-        obj.net.load_state_dict(ckpt["state_dict"])
+        sd = {k.removeprefix("_orig_mod."): v for k, v in ckpt["state_dict"].items()}
+        obj.net.load_state_dict(sd)
         obj.net.eval()
         obj.model = obj.net
         device = p.get("device", "cuda") if torch.cuda.is_available() else "cpu"
