@@ -60,6 +60,28 @@ python scripts/tune.py --model lightgbm --trials 30 --sample 3000
 
 TabR may be dropped if behind schedule; the three remaining tree/TabPFN/TabM results are sufficient for the paper's main claims.
 
+## Dashboard and model API
+
+A web app in `frontend/` shows the study results and runs the saved TabM models on your own sales data.
+A FastAPI backend in `backend/app.py` loads `results/tabm_{e1,e2,e3}_seed42.pt` for the "Run the model" page.
+
+```bash
+# one-time: install the API's packages into the venv
+.venv\Scripts\python -m pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+.venv\Scripts\python -m pip install fastapi "uvicorn[standard]" python-multipart httpx2 pyyaml
+.venv\Scripts\python -m pip install -e . --no-deps
+
+python scripts/export_frontend_data.py                                   # refresh frontend/public/data.json from results/
+.venv\Scripts\python -m uvicorn app:app --app-dir backend --port 8000   # terminal 1: model API
+cd frontend && npm install && npm run dev                                # terminal 2: http://localhost:5173
+```
+
+- **Study results**: WAPE by model and experiment, shift sensitivity, per-series error spread, category and state splits, a cold-start item table, and the Wilcoxon p-values.
+- **Run the model**: forecast one item from a pasted sales history, or upload a CSV (`date,item_id,store_id,sales,sell_price`) and compare TabM with a repeat-last-week baseline.
+- Only TabM has saved weights, so the other four models cannot be run from the app.
+- If a checkpoint is incomplete or missing, the page names the file and asks you to copy it again.
+- Item IDs are not mapped to training codes, so forecasts for unseen items rely on lags, rolling statistics, calendar and price. See `frontend/README.md` for details.
+
 ## Results layout
 
 ```
