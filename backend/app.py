@@ -24,7 +24,7 @@ from shift_study.features import FEATURES, add_features
 from shift_study.models.tabm import TabMModel
 
 MODEL_DIR = Path(os.environ.get("SHIFT_MODEL_DIR", "results"))
-EXPS = ("e1", "e2", "e3")
+EXPS = ("e1", "e2", "e3", "test")
 MIN_HISTORY = 36          # lag_35 plus the target day
 MAX_ROWS = 300_000
 
@@ -45,6 +45,8 @@ NO_EVENT = 4
 # ── model loading ───────────────────────────────────────────────────────────
 
 def _ckpt_path(exp: str) -> Path:
+    if exp == "test":
+        return MODEL_DIR / "test_tabm.pt"
     return MODEL_DIR / f"tabm_{exp}_seed42.pt"
 
 
@@ -80,6 +82,15 @@ def health():
         except HTTPException as ex:
             out[e] = {"ok": False, "error": ex.detail, "bytes": p.stat().st_size if p.exists() else 0}
     return out
+
+
+@app.get("/api/sample")
+def sample_csv():
+    p = Path("sample_sales.csv")
+    if p.exists():
+        from fastapi.responses import FileResponse
+        return FileResponse(p, media_type="text/csv", filename="sample_sales.csv")
+    raise HTTPException(404, "Sample sales CSV file not found.")
 
 
 # ── feature helpers ─────────────────────────────────────────────────────────

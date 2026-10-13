@@ -1,15 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const EXP_LABEL = { e1: "E1 (random split)", e2: "E2 (temporal split)", e3: "E3 (cold-start items)" };
+const EXP_LABEL = {
+  e2: "E2 (Temporal split — Year 5)",
+  e1: "E1 (Random split baseline)",
+  e3: "E3 (Cold-start items)",
+  test: "Test / Local Dev Checkpoint",
+};
+
+const REQUIRED_COLS = ["date", "item_id", "store_id", "sales", "sell_price"];
+const OPTIONAL_COLS = ["snap", "event_type_1", "dept_id", "cat_id", "state_id"];
+
 const pct = (x) => (x == null ? "n/a" : (x * 100).toFixed(1) + "%");
+const fmtNum = (x, d = 2) => (x == null || Number.isNaN(x) ? "—" : Number(x).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }));
 
 async function api(path, opts) {
   let res;
   try {
     res = await fetch(path, opts);
   } catch {
-    throw new Error("Cannot reach the model API. Start it with the command shown above.");
+    throw new Error("Cannot reach model API. Start it with: .venv\\Scripts\\python -m uvicorn app:app --app-dir backend --port 8000");
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "The request failed (" + res.status + ").");
@@ -22,11 +32,80 @@ function parseSales(text) {
   return { vals };
 }
 
-// Synthetic demo only: weekly pattern plus noise. Not real Walmart data.
 function exampleSales() {
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   return Array.from({ length: 70 }, (_, i) => Math.max(0, Math.round(5 + (i % 7 > 4 ? 3 : 0) + (rnd() - 0.5) * 4))).join(", ");
+}
+
+function downloadCsvTemplate() {
+  const template =
+    "date,item_id,store_id,sales,sell_price,dept_id,cat_id,state_id,event_type_1,snap\n" +
+    "2016-01-01,FOODS_3_090,CA_1,8,2.98,FOODS_3,FOODS,CA,,1\n" +
+    "2016-01-02,FOODS_3_090,CA_1,11,2.98,FOODS_3,FOODS,CA,,1\n" +
+    "2016-01-03,FOODS_3_090,CA_1,9,2.98,FOODS_3,FOODS,CA,,1\n";
+  const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "retail_sales_template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function parseCsvClientSide(text) {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return { error: "CSV file is empty." };
+
+  const rawHeaders = lines[0].split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
+  const headers = rawHeaders.map((c) => c.toLowerCase());
+
+  const missing = REQUIRED_COLS.filter((c) => !headers.includes(c));
+  const optionalFound = OPTIONAL_COLS.filter((c) => headers.includes(c));
+
+  // Parse preview rows
+  const previewRows = [];
+  const seriesSet = new Set();
+  const dateSet = [];
+
+  const dateIdx = headers.indexOf("date");
+  const itemIdx = headers.indexOf("item_id");
+  const storeIdx = headers.indexOf("store_id");
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
+    if (cols.length < headers.length) continue;
+
+    if (previewRows.length < 5) {
+      const rowObj = {};
+      rawHeaders.forEach((h, idx) => {
+        rowObj[h] = cols[idx] ?? "";
+      });
+      previewRows.push(rowObj);
+    }
+
+    if (itemIdx >= 0 && storeIdx >= 0) {
+      seriesSet.add(`${cols[itemIdx]}_${cols[storeIdx]}`);
+    }
+    if (dateIdx >= 0 && cols[dateIdx]) {
+      dateSet.push(cols[dateIdx]);
+    }
+  }
+
+  dateSet.sort();
+  const minDate = dateSet[0] || "n/a";
+  const maxDate = dateSet[dateSet.length - 1] || "n/a";
+
+  return {
+    headers: rawHeaders,
+    missing,
+    optionalFound,
+    previewRows,
+    rowCount: lines.length - 1,
+    seriesCount: seriesSet.size,
+    dateRange: `${minDate} → ${maxDate}`,
+    isValid: missing.length === 0,
+  };
 }
 
 function Status({ health }) {
@@ -34,69 +113,560 @@ function Status({ health }) {
   if (health.unreachable) {
     return (
       <div className="callout bad">
-        <b>The model API is not running.</b> In a terminal at the repo root run:
+        <b>Model inference API unreachable.</b> Start the backend in terminal:
         <pre>.venv\Scripts\python -m uvicorn app:app --app-dir backend --port 8000</pre>
       </div>
     );
   }
   const bad = Object.entries(health).filter(([, v]) => !v.ok);
-  if (!bad.length) return <div className="callout ok">All three TabM checkpoints loaded.</div>;
+  if (!bad.length) return <div className="callout ok">All registered TabM checkpoints ready.</div>;
   return (
     <div className="callout bad">
-      <b>{bad.length === 3 ? "No checkpoint can be loaded." : "Some checkpoints cannot be loaded."}</b>
-      {bad.map(([k, v]) => <div key={k}>{EXP_LABEL[k]}: {v.error}</div>)}
+      <b>{bad.length === Object.keys(health).length ? "No checkpoint could be loaded." : "Some checkpoints are incomplete."}</b>
+      {bad.map(([k, v]) => (
+        <div key={k} style={{ marginTop: 4 }}>
+          <code>{k}</code>: {v.error}
+        </div>
+      ))}
     </div>
   );
 }
 
-export default function RunModel() {
-  const [health, setHealth] = useState(null);
-  const [mode, setMode] = useState("forecast");
-  useEffect(() => {
-    api("/api/health").then(setHealth).catch(() => setHealth({ unreachable: true }));
-  }, []);
-  const usable = health && !health.unreachable ? Object.entries(health).filter(([, v]) => v.ok).map(([k]) => k) : [];
-  return (
-    <>
-      <header className="top">
-        <h1>Run the model on your own sales.</h1>
-        <p>
-          Enter a sales history and TabM forecasts the next days, or upload a CSV and see how the model scores against
-          your actuals. The model runs on the local API, not in the browser.
-        </p>
-        <div className="controls">
-          <div className="seg" role="group" aria-label="Task">
-            <button aria-pressed={mode === "forecast"} onClick={() => setMode("forecast")}>Forecast one item</button>
-            <button aria-pressed={mode === "score"} onClick={() => setMode("score")}>Score a CSV</button>
-          </div>
-        </div>
-      </header>
-      <Status health={health} />
-      {mode === "forecast" ? <Forecast usable={usable} /> : <Score usable={usable} />}
-    </>
-  );
-}
-
-function ModelSelect({ value, onChange, usable }) {
+function ModelSelect({ value, onChange, usable, health }) {
+  const allModels = ["e2", "e1", "e3", "test"];
   return (
     <label className="field">
-      <span>Model</span>
+      <span>Target Checkpoint</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {["e1", "e2", "e3"].map((e) => (
-          <option key={e} value={e} disabled={!usable.includes(e)}>TabM, {EXP_LABEL[e]}{usable.includes(e) ? "" : " (unavailable)"}</option>
-        ))}
+        {allModels.map((k) => {
+          const isOk = usable.includes(k);
+          const isConfigured = health && health[k];
+          return (
+            <option key={k} value={k} disabled={!isOk}>
+              TabM ({EXP_LABEL[k] || k}) {isOk ? "— [Ready]" : isConfigured ? "— [Incomplete]" : "— [Not present]"}
+            </option>
+          );
+        })}
       </select>
     </label>
   );
 }
 
-function Forecast({ usable }) {
+export default function RunModel() {
+  const [health, setHealth] = useState(null);
+  const [mode, setMode] = useState("score"); // default to score CSV
+
+  useEffect(() => {
+    api("/api/health")
+      .then(setHealth)
+      .catch(() => setHealth({ unreachable: true }));
+  }, []);
+
+  const usable = health && !health.unreachable ? Object.entries(health).filter(([, v]) => v.ok).map(([k]) => k) : [];
+
+  return (
+    <>
+      <header className="top">
+        <h1>Retail Sales Inference & Scoring</h1>
+        <p>
+          Evaluate TabM tabular checkpoints against custom retail sales time-series. Ingest multi-series CSV actuals to score
+          against rolling lag-7 baselines, or generate recursive step forecasts.
+        </p>
+        <div className="controls">
+          <div className="seg" role="group" aria-label="Task">
+            <button aria-pressed={mode === "score"} onClick={() => setMode("score")}>
+              Score a CSV Dataset
+            </button>
+            <button aria-pressed={mode === "forecast"} onClick={() => setMode("forecast")}>
+              Forecast Single Item
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <Status health={health} />
+
+      {mode === "score" ? <Score usable={usable} health={health} /> : <Forecast usable={usable} health={health} />}
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCORE A CSV COMPONENT (ENGINEERING-GRADE / ANTI-AI SLOP)
+   ───────────────────────────────────────────────────────────────────────────── */
+function Score({ usable, health }) {
+  const [model, setModel] = useState("test");
+  const [file, setFile] = useState(null);
+  const [inspect, setInspect] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
+  const [state, setState] = useState({ busy: false, error: null, result: null });
+  const [selectedSeriesIdx, setSelectedSeriesIdx] = useState(0);
+  const [searchDate, setSearchDate] = useState("");
+  const fileInputRef = useRef(null);
+
+  // Auto-select first usable checkpoint
+  useEffect(() => {
+    if (usable.length && !usable.includes(model)) {
+      setModel(usable[0]);
+    }
+  }, [usable.join()]); // eslint-disable-line
+
+  const handleFileProcess = (chosenFile) => {
+    if (!chosenFile) return;
+    setFile(chosenFile);
+    setState({ busy: false, error: null, result: null });
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const parsed = parseCsvClientSide(text);
+      setInspect(parsed);
+    };
+    reader.readAsText(chosenFile.slice(0, 150000)); // fast inspection on first 150KB
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileProcess(e.dataTransfer.files[0]);
+    }
+  };
+
+  const loadBuiltinSample = async () => {
+    setLoadingSample(true);
+    try {
+      const res = await fetch("/sample_sales.csv");
+      if (!res.ok) throw new Error("Could not fetch /sample_sales.csv");
+      const blob = await res.blob();
+      const sampleFile = new File([blob], "sample_sales.csv", { type: "text/csv" });
+      handleFileProcess(sampleFile);
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: `Failed to load sample: ${err.message}` }));
+    } finally {
+      setLoadingSample(false);
+    }
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setInspect(null);
+    setState({ busy: false, error: null, result: null });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  async function runScoring(e) {
+    e.preventDefault();
+    if (!file) return setState({ busy: false, error: "Select or drop a CSV file first.", result: null });
+    if (inspect && !inspect.isValid) {
+      return setState({ busy: false, error: `Missing required columns: ${inspect.missing.join(", ")}`, result: null });
+    }
+
+    setState({ busy: true, error: null, result: null });
+    const body = new FormData();
+    body.append("file", file);
+    body.append("model", model);
+
+    try {
+      const res = await api("/api/score", { method: "POST", body });
+      setState({ busy: false, error: null, result: res });
+      setSelectedSeriesIdx(0);
+    } catch (err) {
+      setState({ busy: false, error: err.message, result: null });
+    }
+  }
+
+  function downloadResultsCsv() {
+    const r = state.result;
+    if (!r?.rows) return;
+    const header = "id,date,actual,pred,abs_error\n";
+    const body = r.rows
+      .map((x) => [x.id, x.date, x.actual, x.pred, Math.abs(x.actual - x.pred).toFixed(3)].join(","))
+      .join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([header + body], { type: "text/csv" }));
+    a.download = `tabm_${model}_predictions.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  const result = state.result;
+  const activeSeries = result?.series?.[selectedSeriesIdx] || result?.series?.[0];
+
+  // Filtered rows for results table
+  const filteredRows = useMemo(() => {
+    if (!result?.rows) return [];
+    let list = result.rows;
+    if (activeSeries?.id) {
+      list = list.filter((r) => r.id === activeSeries.id);
+    }
+    if (searchDate.trim()) {
+      list = list.filter((r) => r.date.includes(searchDate.trim()));
+    }
+    return list;
+  }, [result, activeSeries, searchDate]);
+
+  return (
+    <div className="grid2">
+      {/* LEFT PANEL: UPLOAD & PRE-FLIGHT VALIDATION */}
+      <section className="panel">
+        <div className="head">
+          <div>
+            <h2>Dataset Ingestion</h2>
+            <p>One row per item/store/day. Continuous daily timestamps required (minimum 36 continuous days for lag_35).</p>
+          </div>
+        </div>
+
+        <form onSubmit={runScoring} className="form">
+          <ModelSelect value={model} onChange={setModel} usable={usable} health={health} />
+
+          {/* DRAG AND DROP ZONE */}
+          <div
+            className={`drop-zone ${isDragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => !file && fileInputRef.current?.click()}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".csv,text/csv"
+              style={{ display: "none" }}
+              onChange={(e) => handleFileProcess(e.target.files?.[0])}
+            />
+
+            {!file ? (
+              <>
+                <svg className="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <div className="drop-zone-title">Drop CSV file here, or click to browse</div>
+                <div className="drop-zone-subtitle">Required columns: date, item_id, store_id, sales, sell_price</div>
+                <div className="toolbar-actions" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" className="secondary" onClick={() => fileInputRef.current?.click()}>
+                    Browse Local File
+                  </button>
+                  <button type="button" className="secondary" onClick={loadBuiltinSample} disabled={loadingSample}>
+                    {loadingSample ? "Loading..." : "Load Built-in Sample (sample_sales.csv)"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="file-meta-card" onClick={(e) => e.stopPropagation()}>
+                <div className="file-meta-info">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <div>
+                    <div className="file-meta-name">{file.name}</div>
+                    <div className="file-meta-size">
+                      {(file.size / 1024).toFixed(1)} KB &bull; {inspect?.rowCount ? `${inspect.rowCount.toLocaleString()} rows` : "Parsing..."}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" className="secondary" onClick={clearFile} style={{ padding: "6px 10px" }}>
+                  Replace
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* PRE-FLIGHT SCHEMA INSPECTION */}
+          {inspect && (
+            <div className="preflight-card">
+              <div className="preflight-header">
+                <span className="preflight-title">Pre-Flight Schema Validation</span>
+                <span className={`badge ${inspect.isValid ? "ok" : "err"}`}>
+                  {inspect.isValid ? "Valid Schema" : `Missing ${inspect.missing.length} Column(s)`}
+                </span>
+              </div>
+
+              <div>
+                <span className="small muted">Required columns check:</span>
+                <div className="badge-group">
+                  {REQUIRED_COLS.map((col) => {
+                    const found = !inspect.missing.includes(col);
+                    return (
+                      <span key={col} className={`badge ${found ? "ok" : "err"}`}>
+                        {found ? "✓" : "✗"} {col}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {inspect.optionalFound.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <span className="small muted">Optional features detected:</span>
+                  <div className="badge-group">
+                    {inspect.optionalFound.map((col) => (
+                      <span key={col} className="badge info">
+                        + {col}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                <div className="stat" style={{ paddingLeft: 8 }}>
+                  <div className="v" style={{ fontSize: "1.2rem" }}>
+                    {inspect.seriesCount}
+                  </div>
+                  <div className="l">Series detected</div>
+                </div>
+                <div className="stat" style={{ paddingLeft: 8 }}>
+                  <div className="v" style={{ fontSize: "1rem", fontFamily: "ui-monospace, monospace" }}>
+                    {inspect.dateRange}
+                  </div>
+                  <div className="l">Date coverage</div>
+                </div>
+              </div>
+
+              {/* Top 5 rows preview */}
+              {inspect.previewRows?.length > 0 && (
+                <div className="preview-box">
+                  <div className="preview-box-header">
+                    <span>First 5 parsed records</span>
+                    <span className="muted">{inspect.headers.join(", ")}</span>
+                  </div>
+                  <div className="scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          {inspect.headers.map((h) => (
+                            <th key={h}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inspect.previewRows.map((r, idx) => (
+                          <tr key={idx}>
+                            {inspect.headers.map((h) => (
+                              <td key={h}>{r[h] ?? ""}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="toolbar-actions">
+            <button className="primary" disabled={state.busy || !file || (inspect && !inspect.isValid) || !usable.length}>
+              {state.busy ? (
+                <>
+                  <span className="spinner" style={{ marginRight: 8 }} />
+                  Extracting Features & Scoring...
+                </>
+              ) : (
+                "Score Dataset with TabM"
+              )}
+            </button>
+            <button type="button" className="secondary" onClick={downloadCsvTemplate}>
+              Download CSV Template
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {/* RIGHT PANEL: EVALUATION METRICS & PREDICTIONS */}
+      <section className="panel">
+        <div className="head">
+          <div>
+            <h2>Model Performance & Scoring</h2>
+            <p>Weighted Absolute Percentage Error (WAPE) compared directly against a repeat-last-week (lag_7) seasonal baseline.</p>
+          </div>
+        </div>
+
+        {state.error && <div className="callout bad">{state.error}</div>}
+
+        {!result && !state.error && !state.busy && (
+          <div style={{ padding: "40px 10px", textAlign: "center", color: "var(--ink-2)" }}>
+            <p>Upload a CSV dataset and run scoring to view per-series forecasting telemetry and residual analysis.</p>
+          </div>
+        )}
+
+        {state.busy && (
+          <div style={{ padding: "50px 10px", textAlign: "center" }}>
+            <div className="spinner" style={{ width: 28, height: 28, borderWidth: 3, margin: "0 auto 16px" }} />
+            <p className="muted">Running feature transformation pipeline and evaluating PyTorch checkpoint...</p>
+          </div>
+        )}
+
+        {result && (
+          <>
+            {/* STATS TILES */}
+            <div className="metric-row">
+              <div className="metric-tile">
+                <div className="label">TabM WAPE</div>
+                <div className="val">{pct(result.wape)}</div>
+                <div className="sub">Weighted percentage error</div>
+              </div>
+              <div className="metric-tile">
+                <div className="label">Lag-7 Baseline</div>
+                <div className="val">{pct(result.wape_lag7_baseline)}</div>
+                <div className="sub">Repeat-last-week error</div>
+              </div>
+              <div className="metric-tile">
+                <div className="label">Relative Delta</div>
+                <div className="val" style={{ color: (result.wape || 0) <= (result.wape_lag7_baseline || 0) ? "var(--m-tabpfn)" : "var(--warn)" }}>
+                  {result.wape_lag7_baseline ? `${(((result.wape - result.wape_lag7_baseline) / result.wape_lag7_baseline) * 100).toFixed(1)}%` : "—"}
+                </div>
+                <div className="sub">Error delta vs baseline</div>
+              </div>
+              <div className="metric-tile">
+                <div className="label">Scored Horizon</div>
+                <div className="val">{result.n_rows.toLocaleString()}</div>
+                <div className="sub">{result.n_series} unique series</div>
+              </div>
+            </div>
+
+            {/* SERIES SELECTOR PILLS */}
+            {result.series?.length > 0 && (
+              <>
+                <div style={{ margin: "18px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="small muted">Select series for actual vs forecast comparison:</span>
+                  {activeSeries && <span className="badge ok">Series WAPE: {pct(activeSeries.wape)}</span>}
+                </div>
+                <div className="seg" role="group" aria-label="Series selector">
+                  {result.series.map((s, i) => (
+                    <button key={s.id} aria-pressed={selectedSeriesIdx === i} onClick={() => setSelectedSeriesIdx(i)}>
+                      {s.id} &bull; {pct(s.wape)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* TIME-SERIES VISUALIZATION */}
+            {activeSeries?.points && (
+              <div style={{ height: 260, marginTop: 16 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={activeSeries.points} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--line)" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(d) => d.slice(5)}
+                      minTickGap={20}
+                      stroke="var(--ink-3)"
+                      tick={{ fill: "var(--ink-2)", fontSize: 11 }}
+                    />
+                    <YAxis stroke="var(--ink-3)" tick={{ fill: "var(--ink-2)" }} width={42} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const actualVal = payload.find((p) => p.dataKey === "actual")?.value;
+                        const predVal = payload.find((p) => p.dataKey === "pred")?.value;
+                        const res = actualVal != null && predVal != null ? Math.abs(actualVal - predVal).toFixed(2) : "—";
+                        return (
+                          <div className="tip">
+                            <div>
+                              <b>Date: {label}</b>
+                            </div>
+                            <div style={{ color: "var(--ink-2)" }}>Actual: {actualVal}</div>
+                            <div style={{ color: "var(--m-tabm)" }}>TabM Forecast: {predVal}</div>
+                            <div style={{ color: "var(--warn)" }}>Absolute Error: {res}</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend />
+                    <Line isAnimationActive={false} dataKey="actual" name="Actual Units" stroke="var(--ink-2)" strokeWidth={2} dot={false} />
+                    <Line isAnimationActive={false} dataKey="pred" name="TabM Predicted" stroke="var(--m-tabm)" strokeWidth={2.5} dot={{ r: 2.5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* DATA TABLE EXPLORER */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span className="small muted">Record Explorer ({filteredRows.length} rows)</span>
+                <input
+                  type="search"
+                  placeholder="Filter by date (YYYY-MM-DD)..."
+                  value={searchDate}
+                  onChange={(e) => setSearchDate(e.target.value)}
+                  style={{ minWidth: 200, padding: "4px 8px", fontSize: "0.82rem" }}
+                />
+              </div>
+
+              <div className="scroll" style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Series</th>
+                      <th>Date</th>
+                      <th>Actual</th>
+                      <th>TabM Predicted</th>
+                      <th>Residual (|A - P|)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.slice(0, 100).map((r, i) => {
+                      const diff = Math.abs(r.actual - r.pred);
+                      return (
+                        <tr key={i}>
+                          <td className="mono">{r.id}</td>
+                          <td className="mono">{r.date}</td>
+                          <td>{fmtNum(r.actual, 1)}</td>
+                          <td style={{ color: "var(--m-tabm)", fontWeight: 600 }}>{fmtNum(r.pred, 2)}</td>
+                          <td className="muted">{fmtNum(diff, 2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="toolbar-actions" style={{ marginTop: 14 }}>
+              <button className="secondary" onClick={downloadResultsCsv}>
+                Export Predictions CSV
+              </button>
+              {result.truncated && <span className="small muted">Dataset truncated to first 20,000 scored rows for memory efficiency.</span>}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SINGLE-SERIES RECURSIVE FORECAST (RETAINED & POLISHED)
+   ───────────────────────────────────────────────────────────────────────────── */
+function Forecast({ usable, health }) {
   const [f, setF] = useState({
-    model: "e2", sales: "", end_date: new Date().toISOString().slice(0, 10), price: "3.50", horizon: 14,
-    item_id: "FOODS_3_090", store_id: "CA_1",
+    model: "test",
+    sales: "",
+    end_date: new Date().toISOString().slice(0, 10),
+    price: "3.50",
+    horizon: 14,
+    item_id: "FOODS_3_090",
+    store_id: "CA_1",
   });
   const [state, setState] = useState({ busy: false, error: null, result: null });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
   useEffect(() => {
     if (usable.length && !usable.includes(f.model)) setF((p) => ({ ...p, model: usable[0] }));
   }, [usable.join()]); // eslint-disable-line
@@ -108,10 +678,16 @@ function Forecast({ usable }) {
     setState({ busy: true, error: null, result: null });
     try {
       const result = await api("/api/forecast", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: f.model, sales: vals, end_date: f.end_date, price: Number(f.price),
-          horizon: Number(f.horizon), item_id: f.item_id, store_id: f.store_id,
+          model: f.model,
+          sales: vals,
+          end_date: f.end_date,
+          price: Number(f.price),
+          horizon: Number(f.horizon),
+          item_id: f.item_id,
+          store_id: f.store_id,
         }),
       });
       setState({ busy: false, error: null, result });
@@ -126,45 +702,77 @@ function Forecast({ usable }) {
     const last = r.history_tail[r.history_tail.length - 1];
     return [
       ...r.history_tail.map((p) => ({ date: p.date, history: p.sales })),
-      ...r.forecast.map((p, i) => ({ date: p.date, forecast: p.forecast, ...(i === 0 ? {} : {}) })),
-    ].map((p, i, a) => (p.date === r.forecast[0].date ? { ...p, history: last.sales } : p));
+      ...r.forecast.map((p) => ({ date: p.date, forecast: p.forecast })),
+    ].map((p) => (p.date === r.forecast[0].date ? { ...p, history: last.sales } : p));
   }, [state.result]);
 
   return (
     <div className="grid2">
       <section className="panel">
-        <div className="head"><div><h2>Inputs</h2><p>Give at least 36 days of daily unit sales for one item in one store, oldest first.</p></div></div>
+        <div className="head">
+          <div>
+            <h2>Single-Item Forecast</h2>
+            <p>Provide at least 36 consecutive daily unit sales for one series, oldest first.</p>
+          </div>
+        </div>
         <form onSubmit={run} className="form">
-          <ModelSelect value={f.model} onChange={(v) => setF({ ...f, model: v })} usable={usable} />
+          <ModelSelect value={f.model} onChange={(v) => setF({ ...f, model: v })} usable={usable} health={health} />
           <label className="field">
-            <span>Daily sales (oldest to newest)</span>
+            <span>Daily sales sequence (comma separated, oldest to newest)</span>
             <textarea rows={5} value={f.sales} onChange={set("sales")} placeholder="4, 6, 5, 9, 11, 5, 4, ..." required />
           </label>
-          <button type="button" className="link" onClick={() => setF({ ...f, sales: exampleSales() })}>Fill with synthetic example data</button>
+          <button type="button" className="link" onClick={() => setF({ ...f, sales: exampleSales() })}>
+            Populate with synthetic example series
+          </button>
           <div className="row2">
-            <label className="field"><span>Date of last value</span><input type="date" value={f.end_date} onChange={set("end_date")} required /></label>
-            <label className="field"><span>Price</span><input type="number" step="0.01" min="0" value={f.price} onChange={set("price")} required /></label>
+            <label className="field">
+              <span>Date of last recorded value</span>
+              <input type="date" value={f.end_date} onChange={set("end_date")} required />
+            </label>
+            <label className="field">
+              <span>Unit Price</span>
+              <input type="number" step="0.01" min="0" value={f.price} onChange={set("price")} required />
+            </label>
           </div>
           <div className="row2">
-            <label className="field"><span>Item ID</span><input value={f.item_id} onChange={set("item_id")} /></label>
-            <label className="field"><span>Store ID</span><input value={f.store_id} onChange={set("store_id")} /></label>
+            <label className="field">
+              <span>Item ID</span>
+              <input value={f.item_id} onChange={set("item_id")} />
+            </label>
+            <label className="field">
+              <span>Store ID</span>
+              <input value={f.store_id} onChange={set("store_id")} />
+            </label>
           </div>
-          <label className="field"><span>Days to forecast: {f.horizon}</span>
-            <input type="range" min="1" max="28" value={f.horizon} onChange={set("horizon")} /></label>
-          <button className="primary" disabled={state.busy || !usable.length}>{state.busy ? "Running model…" : "Run forecast"}</button>
-          <p className="muted small">Item and store names that follow M5 patterns (FOODS_3_090, CA_1) set the category, department, state and store inputs. Other names fall back to defaults.</p>
+          <label className="field">
+            <span>Forecast Horizon: {f.horizon} days</span>
+            <input type="range" min="1" max="28" value={f.horizon} onChange={set("horizon")} />
+          </label>
+          <button className="primary" disabled={state.busy || !usable.length}>
+            {state.busy ? "Running recursive forecast…" : "Execute Forecast"}
+          </button>
         </form>
       </section>
 
       <section className="panel">
-        <div className="head"><div><h2>Forecast</h2><p>Each day is predicted from the earlier days, including earlier forecasts.</p></div></div>
+        <div className="head">
+          <div>
+            <h2>Forecast Projection</h2>
+            <p>Each step is recursively projected from historical context and prior forecasts.</p>
+          </div>
+        </div>
         {state.error && <div className="callout bad">{state.error}</div>}
-        {!state.result && !state.error && <p className="muted">Run a forecast to see the next days here.</p>}
+        {!state.result && !state.error && <p className="muted">Submit input series to generate projections.</p>}
         {state.result && (
           <>
-            <div className="stats"><div className="stat"><div className="v">{state.result.total}</div><div className="l">Units forecast over {state.result.forecast.length} days</div></div></div>
+            <div className="stats">
+              <div className="stat">
+                <div className="v">{state.result.total}</div>
+                <div className="l">Total units forecast over {state.result.forecast.length} days</div>
+              </div>
+            </div>
             <div style={{ height: 260, marginTop: 12 }}>
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chart} margin={{ left: 0, right: 12 }}>
                   <CartesianGrid vertical={false} stroke="var(--line)" />
                   <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} minTickGap={24} stroke="var(--ink-3)" tick={{ fill: "var(--ink-2)", fontSize: 11 }} />
@@ -177,92 +785,23 @@ function Forecast({ usable }) {
               </ResponsiveContainer>
             </div>
             <div className="scroll" style={{ maxHeight: 220, overflowY: "auto", marginTop: 8 }}>
-              <table><thead><tr><th>Date</th><th>Forecast units</th></tr></thead>
-                <tbody>{state.result.forecast.map((r) => <tr key={r.date}><td>{r.date}</td><td>{r.forecast.toFixed(2)}</td></tr>)}</tbody></table>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Forecast units</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.result.forecast.map((r) => (
+                    <tr key={r.date}>
+                      <td className="mono">{r.date}</td>
+                      <td>{fmtNum(r.forecast, 2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function Score({ usable }) {
-  const [model, setModel] = useState("e2");
-  const [file, setFile] = useState(null);
-  const [state, setState] = useState({ busy: false, error: null, result: null });
-  const [pick, setPick] = useState(0);
-  useEffect(() => {
-    if (usable.length && !usable.includes(model)) setModel(usable[0]);
-  }, [usable.join()]); // eslint-disable-line
-
-  async function run(e) {
-    e.preventDefault();
-    if (!file) return setState({ busy: false, error: "Choose a CSV file first.", result: null });
-    setState({ busy: true, error: null, result: null });
-    const body = new FormData();
-    body.append("file", file);
-    body.append("model", model);
-    try {
-      setState({ busy: false, error: null, result: await api("/api/score", { method: "POST", body }) });
-      setPick(0);
-    } catch (err) {
-      setState({ busy: false, error: err.message, result: null });
-    }
-  }
-  function download() {
-    const r = state.result;
-    const csv = "id,date,actual,pred\n" + r.rows.map((x) => [x.id, x.date, x.actual, x.pred].join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "tabm_predictions.csv";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-  const r = state.result;
-  const s = r?.series[pick];
-  return (
-    <div className="grid2">
-      <section className="panel">
-        <div className="head"><div><h2>Upload sales</h2><p>One row per item, store and day. Columns: date, item_id, store_id, sales, sell_price. Optional: snap, event_type_1, dept_id, cat_id, state_id.</p></div></div>
-        <form onSubmit={run} className="form">
-          <ModelSelect value={model} onChange={setModel} usable={usable} />
-          <label className="field"><span>CSV file</span>
-            <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files[0] || null)} /></label>
-          <button className="primary" disabled={state.busy || !usable.length}>{state.busy ? "Running model…" : "Score file"}</button>
-          <p className="muted small">Each series needs at least 36 consecutive days. The model predicts every day after that from its own history, and the result is compared with your actual sales.</p>
-        </form>
-      </section>
-      <section className="panel">
-        <div className="head"><div><h2>Results</h2><p>WAPE compares the model with a simple baseline that repeats last week's sales.</p></div></div>
-        {state.error && <div className="callout bad">{state.error}</div>}
-        {!r && !state.error && <p className="muted">Upload a file to see how the model does on it.</p>}
-        {r && (
-          <>
-            <div className="stats">
-              <div className="stat"><div className="v">{pct(r.wape)}</div><div className="l">TabM WAPE</div></div>
-              <div className="stat"><div className="v">{pct(r.wape_lag7_baseline)}</div><div className="l">Repeat-last-week WAPE</div></div>
-              <div className="stat"><div className="v">{r.n_series.toLocaleString()}</div><div className="l">Series, {r.n_rows.toLocaleString()} scored days</div></div>
-            </div>
-            <div className="seg" style={{ margin: "14px 0 8px" }} role="group" aria-label="Series">
-              {r.series.map((x, i) => <button key={x.id} aria-pressed={pick === i} onClick={() => setPick(i)}>{x.id.replace(/_evaluation$/, "")}</button>)}
-            </div>
-            <p className="muted small">WAPE for this series: {pct(s.wape)}. Showing the last {s.points.length} days.</p>
-            <div style={{ height: 240 }}>
-              <ResponsiveContainer>
-                <LineChart data={s.points} margin={{ left: 0, right: 12 }}>
-                  <CartesianGrid vertical={false} stroke="var(--line)" />
-                  <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} minTickGap={24} stroke="var(--ink-3)" tick={{ fill: "var(--ink-2)", fontSize: 11 }} />
-                  <YAxis stroke="var(--ink-3)" tick={{ fill: "var(--ink-2)" }} width={40} />
-                  <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 8 }} />
-                  <Legend />
-                  <Line isAnimationActive={false} dataKey="actual" name="Actual" stroke="var(--ink-2)" strokeWidth={2} dot={false} />
-                  <Line isAnimationActive={false} dataKey="pred" name="TabM" stroke="var(--m-tabm)" strokeWidth={2.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <button className="primary" onClick={download} style={{ marginTop: 12 }}>Download predictions CSV</button>
-            {r.truncated && <p className="note">The download holds the first 20,000 rows only.</p>}
           </>
         )}
       </section>
