@@ -204,10 +204,62 @@ def forecast(req: ForecastReq):
         pred = max(0.0, float(model.predict(last[FEATURES])[0]))
         df.loc[df.index[-1], "sales"] = np.float32(pred)
         out.append({"date": key, "forecast": round(pred, 3)})
+
+    # Statistical dispersion for prediction interval (fan chart)
+    sales_arr = np.asarray(req.sales, dtype=float)
+    hist_std = float(np.std(sales_arr[-28:])) if len(sales_arr) >= 28 else float(np.std(sales_arr))
+    if hist_std <= 0:
+        hist_std = max(1.0, float(np.mean(sales_arr) * 0.2))
+
+    cum = 0.0
+    for step_idx, r in enumerate(out, start=1):
+        # Forecast uncertainty expands with horizon step
+        step_sigma = hist_std * np.sqrt(1.0 + 0.08 * step_idx)
+        p = r["forecast"]
+        cum += p
+        r["lower"] = round(max(0.0, p - 1.28 * step_sigma), 2)  # 80% interval lower bound
+        r["upper"] = round(p + 1.28 * step_sigma, 2)            # 80% interval upper bound
+        r["cumulative"] = round(cum, 2)
+
+    total_units = round(sum(r["forecast"] for r in out), 2)
+    avg_daily = round(total_units / len(out), 2) if out else 0.0
+    projected_rev = round(total_units * fprice, 2)
+    peak_rec = max(out, key=lambda x: x["forecast"]) if out else {"date": "", "forecast": 0.0}
+
+    # Day-of-week seasonality (history vs forecast)
+    hist_df = df.iloc[:n].copy()
+    hist_df["day_name"] = hist_df["date"].dt.day_name()
+    wday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    hist_wday_map = hist_df.groupby("day_name")["sales"].mean().to_dict()
+
+    fc_dates = pd.to_datetime([r["date"] for r in out])
+    fc_df = pd.DataFrame({"day_name": fc_dates.day_name(), "forecast": [r["forecast"] for r in out]})
+    fc_wday_map = fc_df.groupby("day_name")["forecast"].mean().to_dict()
+
+    seasonality = [
+        {
+            "day": d[:3],
+            "day_full": d,
+            "history_avg": round(float(hist_wday_map.get(d, 0.0)), 2),
+            "forecast_avg": round(float(fc_wday_map.get(d, 0.0)), 2),
+        }
+        for d in wday_order
+    ]
+
+    trailing_len = min(len(out), len(sales_arr))
+    trailing_avg = float(sales_arr[-trailing_len:].mean()) if trailing_len > 0 else float(sales_arr.mean())
+    trend_pct = round(((avg_daily - trailing_avg) / trailing_avg * 100), 1) if trailing_avg > 0 else 0.0
+
     return {
         "model": req.model,
         "forecast": out,
-        "total": round(sum(r["forecast"] for r in out), 2),
+        "total": total_units,
+        "avg_daily": avg_daily,
+        "projected_revenue": projected_rev,
+        "peak_day": {"date": peak_rec.get("date", ""), "units": peak_rec.get("forecast", 0.0)},
+        "trend_pct": trend_pct,
+        "seasonality": seasonality,
+        "price_used": fprice,
         "history_tail": [
             {"date": d.strftime("%Y-%m-%d"), "sales": float(s)}
             for d, s in zip(pd.date_range(end=req.end_date, periods=n)[-60:], req.sales[-60:])
@@ -257,9 +309,16 @@ async def score(file: UploadFile = File(...), model: str = Form("e2")):
     series = []
     for sid in top:
         g = feats[feats["id"] == sid].tail(120)
+        item_id_val = str(g["item_id"].iloc[0]) if "item_id" in g.columns else sid.rsplit("_", 1)[0]
+        store_id_val = str(g["store_id"].iloc[0]) if "store_id" in g.columns else sid.rsplit("_", 1)[-1]
         series.append({
             "id": sid,
+            "item_id": item_id_val,
+            "store_id": store_id_val,
             "wape": _wape(feats.loc[feats["id"] == sid, "sales"], feats.loc[feats["id"] == sid, "pred"]),
+            "last_date": g["date"].iloc[-1].strftime("%Y-%m-%d"),
+            "last_price": float(g["sell_price"].iloc[-1]),
+            "sales_history": [float(s) for s in g["sales"]],
             "points": [{"date": d.strftime("%Y-%m-%d"), "actual": float(a), "pred": round(float(p), 3)}
                        for d, a, p in zip(g["date"], g["sales"], g["pred"])],
         })
