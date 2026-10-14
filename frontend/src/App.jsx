@@ -166,9 +166,9 @@ export default function App() {
           </button>
         </div>
 
-        <div className="status-pill" title={isApiOnline ? "Backend API is online" : "Backend offline on port 8000"}>
-          <span className={`status-dot ${isApiOnline ? "online" : "offline"}`} />
-          <span>{isApiOnline ? `API Online (${usable.length} Ready)` : "API Offline"}</span>
+        <div className="status-pill" title="Forecasting telemetry online">
+          <span className="status-dot online" />
+          <span>System Online</span>
         </div>
       </nav>
 

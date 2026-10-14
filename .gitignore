@@ -8,3 +8,6 @@ data/
 *.pdf
 results/*.parquet
 results/report/
+.env
+.env.*
+!.env.example

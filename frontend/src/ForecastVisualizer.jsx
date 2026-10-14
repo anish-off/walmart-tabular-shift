@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "./config.js";
+import { runGroqForecast, GROQ_MODELS } from "./groqForecast.js";
 import {
   Area,
   AreaChart,
@@ -208,7 +209,7 @@ async function api(path, opts) {
 
 export default function ForecastVisualizer({ usable, health, prefill }) {
   const [activePreset, setActivePreset] = useState("highvolume");
-  const [model, setModel] = useState("e1");
+  const [model, setModel] = useState(GROQ_MODELS[0].id);
   const [salesText, setSalesText] = useState(PRESETS.highvolume.sales.join(", "));
   // Dynamic end date defaults to today's live calendar date
   const [endDate, setEndDate] = useState(getTodayStr);
@@ -224,16 +225,12 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
   const [state, setState] = useState({ busy: false, error: null, result: null });
   const [activeView, setActiveView] = useState("fanchart"); // 'fanchart' | 'cumulative' | 'seasonality' | 'schedule'
 
-  useEffect(() => {
-    if (usable.length && !usable.includes(model)) {
-      setModel(usable[0]);
-    }
-  }, [usable.join()]); // eslint-disable-line
 
   useEffect(() => {
     if (prefill) {
       setActivePreset("custom");
-      setModel(prefill.model || model);
+      const targetModel = prefill.model && GROQ_MODELS.some(m => m.id === prefill.model) ? prefill.model : model;
+      setModel(targetModel);
       setSalesText(prefill.sales);
       const prefillDate = prefill.end_date || getTodayStr();
       setEndDate(prefillDate);
@@ -244,7 +241,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
       setHorizon(prefill.horizon || 14);
 
       triggerForecast({
-        model: prefill.model || model,
+        model: targetModel,
         salesText: prefill.sales,
         endDate: prefillDate,
         price: Number(prefill.price),
@@ -257,9 +254,9 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
   }, [prefill]); // eslint-disable-line
 
   useEffect(() => {
-    if (usable.length && !state.result && !state.busy && !prefill) {
+    if (!state.result && !state.busy && !prefill) {
       triggerForecast({
-        model: usable.includes(model) ? model : usable[0],
+        model,
         salesText,
         endDate,
         price: Number(price),
@@ -269,7 +266,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
         storeId,
       });
     }
-  }, [usable.length]); // eslint-disable-line
+  }, []); // eslint-disable-line
 
   const applyPreset = (key) => {
     const p = PRESETS[key];
@@ -282,7 +279,6 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
     setItemId(p.item_id);
     setStoreId(p.store_id);
 
-    // Keep the current dynamic endDate rather than forcing a 2016 date
     triggerForecast({
       model,
       salesText: p.sales.join(", "),
@@ -311,6 +307,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
 
   async function triggerForecast(params) {
     const targetDate = params.endDate || endDate || getTodayStr();
+    const targetModel = params.model || model;
     const vals = (params.salesText || salesText)
       .split(/[\s,;]+/)
       .filter(Boolean)
@@ -319,37 +316,32 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
     if (vals.some((v) => Number.isNaN(v))) {
       return setState({ busy: false, error: "Sales sequence must contain numbers separated by commas.", result: null });
     }
-    if (vals.length < 36) {
+    if (vals.length < 14) {
       return setState({
         busy: false,
-        error: `Requires at least 36 consecutive daily records for lag_35 feature extraction (got ${vals.length}).`,
+        error: `Requires at least 14 daily sales records for statistical analysis (got ${vals.length}).`,
         result: null,
       });
     }
 
-    setState({ busy: true, error: null, result: null });
+    setState((prev) => ({ busy: true, error: null, result: prev.result }));
 
     try {
-      const payload = {
-        model: params.model || model,
+      const forecastParams = {
+        model: targetModel,
         sales: vals,
-        end_date: targetDate,
+        endDate: targetDate,
         price: Number(params.price ?? price),
-        future_price: params.futurePrice ? Number(params.futurePrice) : undefined,
+        futurePrice: params.futurePrice ? Number(params.futurePrice) : undefined,
         horizon: Number(params.horizon || horizon),
-        item_id: params.itemId || itemId,
-        store_id: params.storeId || storeId,
+        itemId: params.itemId || itemId,
+        storeId: params.storeId || storeId,
       };
 
-      const result = await api("/api/forecast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
+      const result = await runGroqForecast(forecastParams);
       setState({ busy: false, error: null, result });
     } catch (err) {
-      setState({ busy: false, error: err.message, result: null });
+      setState((prev) => ({ busy: false, error: err.message, result: prev.result }));
     }
   }
 
@@ -454,7 +446,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
           </div>
         </div>
 
-        {/* Dynamic Date Anchor Shortcuts */}
+        {/* Dynamic Date Anchor Shortcuts & Engine Key */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span className="preset-label">Date Anchor:</span>
           <div className="seg" role="group" aria-label="Date Anchor Mode">
@@ -751,7 +743,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
                     <Line
                       type="monotone"
                       dataKey="forecast"
-                      name="TabM Forecast"
+                      name="Forecast Projection"
                       stroke="var(--accent)"
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: "var(--accent)" }}
@@ -833,7 +825,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
                       }}
                     />
                     <Bar dataKey="history_avg" name="Historical Baseline" fill="var(--line-strong)" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="forecast_avg" name="TabM Forecast" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="forecast_avg" name="Forecast Projection" fill="var(--accent)" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -895,17 +887,13 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
           <form onSubmit={handleSubmit} className="form-stack">
             <div className="row2">
               <label className="field">
-                <span>Model Checkpoint</span>
+                <span>Inference Engine Model</span>
                 <select value={model} onChange={(e) => setModel(e.target.value)}>
-                  {["e2", "e1", "e3", "test"].map((k) => {
-                    const isOk = usable.includes(k);
-                    const isConf = health && health[k];
-                    return (
-                      <option key={k} value={k} disabled={!isOk}>
-                        TabM ({EXP_LABEL[k] || k}) {isOk ? "— [Ready]" : isConf ? "— [Incomplete]" : "— [Unavailable]"}
-                      </option>
-                    );
-                  })}
+                  {GROQ_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -1028,13 +1016,13 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
 
             <button
               className="btn-primary"
-              disabled={state.busy || !usable.length}
+              disabled={state.busy}
               style={{ marginTop: 6, width: "100%" }}
             >
               {state.busy ? (
                 <>
                   <span className="spinner" />
-                  Evaluating TabM Network...
+                  Computing Forecast Projection...
                 </>
               ) : (
                 `Run ${horizon}-Day Forecast Simulation (${formatDisplayDate(endDate)} Anchor)`
@@ -1136,6 +1124,7 @@ export default function ForecastVisualizer({ usable, health, prefill }) {
           )}
         </div>
       </div>
+
     </div>
   );
 }

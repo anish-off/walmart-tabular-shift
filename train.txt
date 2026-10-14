@@ -1,0 +1,162 @@
+Building base table...
+  rows=46,027,957  series=30,490  days=1..1913
+Adding features...
+  rows after NaN-lag drop=44,960,807  features=23
+Wrote /home/23alr106/code/walmart-tabular-shift/features.parquet (362 MB) in 272s
+Loaded 742,839 rows, 500 series
+train=487,245 val=60,011 test=195,583
+Training until validation scores don't improve for 75 rounds
+[100]	valid_0's l1: 0.741407
+[200]	valid_0's l1: 0.740066
+Early stopping, best iteration is:
+[191]	valid_0's l1: 0.740007
+  seed=42  WAPE=0.7091
+WAPE = 0.7091 ± 0.0000  -> /home/23alr106/code/walmart-tabular-shift/results/smoke/lightgbm_e2.json
+[skip] xgboost_e1.json already exists — skipping.
+[skip] xgboost_e2.json already exists — skipping.
+[skip] xgboost_e3.json already exists — skipping.
+[skip] lightgbm_e1.json already exists — skipping.
+[skip] lightgbm_e2.json already exists — skipping.
+[2026-06-17 12:16:05] [SETUP] Starting setup verification...
+[2026-06-17 12:16:05] [SETUP] Project directory: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:16:05] [SETUP] Raw data directory: /home/23alr106/code/walmart-tabular-shift/data/raw
+
+=== Data files ===
+  calendar.csv                                  ✅ 0 MB
+  sell_prices.csv                               ✅ 203 MB
+  sales_train_validation.csv                    ✅ 120 MB
+  sales_train_evaluation.csv                    ✅ 122 MB
+  sample_submission.csv                         ✅ 5 MB
+
+=== GPU ===
+  CUDA: True
+  NVIDIA L4  23.6 GB
+
+✅ Setup complete.
+
+[2026-06-17 12:16:06] [BUILD_FEATURES] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/build_features.py --raw-dir /home/23alr106/code/walmart-tabular-shift/data/raw --out /home/23alr106/code/walmart-tabular-shift/features.parquet
+[2026-06-17 12:16:06] [BUILD_FEATURES] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:20:40] [BUILD_FEATURES] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/build_features.py --raw-dir /home/23alr106/code/walmart-tabular-shift/data/raw --out /home/23alr106/code/walmart-tabular-shift/features.parquet
+[2026-06-17 12:20:40] [BUILD_FEATURES] Elapsed: 274.03s (4.57m)
+
+
+[2026-06-17 12:20:40] [SMOKE_TEST] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e2 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results/smoke --sample 500
+[2026-06-17 12:20:40] [SMOKE_TEST] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:21:02] [SMOKE_TEST] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e2 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results/smoke --sample 500
+[2026-06-17 12:21:02] [SMOKE_TEST] Elapsed: 22.16s (0.37m)
+
+[2026-06-17 12:21:02] [CLEANUP] Cleaning smoke test artefacts...
+[2026-06-17 12:21:02] [CLEANUP] removed directory /home/23alr106/code/walmart-tabular-shift/results/smoke
+[2026-06-17 12:21:02] [CLEANUP] ✅ Cleaned 1 files. Ready for full study.
+
+=======================================================
+[2026-06-17 12:21:02] [SESSION 1] Loop 1/9: ▶ xgboost × e1
+=======================================================
+
+[2026-06-17 12:21:02] [SESSION_1_XGBOOST_E1] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model xgboost --experiment e1 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:02] [SESSION_1_XGBOOST_E1] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E1] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model xgboost --experiment e1 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E1] Elapsed: 0.87s (0.01m)
+
+
+=======================================================
+[2026-06-17 12:21:03] [SESSION 1] Loop 2/9: ▶ xgboost × e2
+=======================================================
+
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E2] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model xgboost --experiment e2 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E2] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E2] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model xgboost --experiment e2 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E2] Elapsed: 0.79s (0.01m)
+
+
+=======================================================
+[2026-06-17 12:21:03] [SESSION 1] Loop 3/9: ▶ xgboost × e3
+=======================================================
+
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E3] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model xgboost --experiment e3 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:03] [SESSION_1_XGBOOST_E3] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:21:04] [SESSION_1_XGBOOST_E3] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model xgboost --experiment e3 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:04] [SESSION_1_XGBOOST_E3] Elapsed: 0.97s (0.02m)
+
+
+=======================================================
+[2026-06-17 12:21:04] [SESSION 1] Loop 4/9: ▶ lightgbm × e1
+=======================================================
+
+[2026-06-17 12:21:04] [SESSION_1_LIGHTGBM_E1] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e1 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:04] [SESSION_1_LIGHTGBM_E1] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:21:05] [SESSION_1_LIGHTGBM_E1] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e1 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:05] [SESSION_1_LIGHTGBM_E1] Elapsed: 0.75s (0.01m)
+
+
+=======================================================
+[2026-06-17 12:21:05] [SESSION 1] Loop 5/9: ▶ lightgbm × e2
+=======================================================
+
+[2026-06-17 12:21:05] [SESSION_1_LIGHTGBM_E2] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e2 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:05] [SESSION_1_LIGHTGBM_E2] CWD: /home/23alr106/code/walmart-tabular-shift
+[2026-06-17 12:21:06] [SESSION_1_LIGHTGBM_E2] ✅ SUCCESS: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e2 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing
+[2026-06-17 12:21:06] [SESSION_1_LIGHTGBM_E2] Elapsed: 1.05s (0.02m)
+
+
+=======================================================
+[2026-06-17 12:21:06] [SESSION 1] Loop 6/9: ▶ lightgbm × e3
+=======================================================
+
+[2026-06-17 12:21:06] [SESSION_1_LIGHTGBM_E3] RUNNING: /opt/intel/oneapi/intelpython/envs/cuda-env/bin/python /home/23alr106/code/walmart-tabular-shift/scripts/run_experiment.py --model lightgbm --experiment e3 --features /home/23alr106/code/walmart-tabular-shift/features.parquet --out /home/23alr106/code/walmart-tabular-shift/results --skip-existing[skip] lightgbm_e3.json already exists — skipping.
+[skip] tabm_e1.json already exists — skipping.
+[skip] tabm_e2.json already exists — skipping.
+[skip] tabm_e3.json already exists — skipping.
+Loaded 44,960,807 rows, 30,490 series
+train=31,472,566 val=4,496,080 test=8,992,161
+  [tabr] epoch  10/100  val_mae=0.2122
+  [tabr] epoch  20/100  val_mae=0.2116
+  [tabr] early stop at epoch 24  val_mae=0.2118
+  seed=42  WAPE=0.6398
+WAPE = 0.6398 ± 0.0000  -> /home/23alr106/code/walmart-tabular-shift/results/tabr_e1.json
+Loaded 44,960,807 rows, 30,490 series
+train=29,463,759 val=3,608,050 test=11,888,998
+  [tabr] epoch  10/100  val_mae=0.1717
+  [tabr] epoch  20/100  val_mae=0.1712
+  [tabr] early stop at epoch 29  val_mae=0.1709
+  seed=42  WAPE=0.6605
+WAPE = 0.6605 ± 0.0000  -> /home/23alr106/code/walmart-tabular-shift/results/tabr_e2.json
+Loaded 44,960,807 rows, 30,490 series
+train=245,728 val=117,739 test=495,096
+  [tabr] epoch  10/100  val_mae=0.5377
+  [tabr] early stop at epoch 17  val_mae=0.5377
+  seed=42  WAPE=0.9234
+WAPE = 0.9234 ± 0.0000  -> /home/23alr106/code/walmart-tabular-shift/results/tabr_e3.json
+{10: 33, 20: 141, 35: 61, 50: 111, 75: 141, 100: 228, 150: 454, 200: 565, 300: 1639, 500: 1603} items per bucket
+Training until validation scores don't improve for 75 rounds
+[100]	valid_0's l1: 0.79885
+[200]	valid_0's l1: 0.796046
+[300]	valid_0's l1: 0.795308
+[400]	valid_0's l1: 0.794648
+[500]	valid_0's l1: 0.794442
+[600]	valid_0's l1: 0.794294
+[700]	valid_0's l1: 0.794069
+[800]	valid_0's l1: 0.793876
+[900]	valid_0's l1: 0.793806
+[1000]	valid_0's l1: 0.793736
+[1100]	valid_0's l1: 0.793602
+[1200]	valid_0's l1: 0.793499
+[1300]	valid_0's l1: 0.793493
+[1400]	valid_0's l1: 0.793477
+[1500]	valid_0's l1: 0.793475
+Did not meet early stopping. Best iteration is:
+[1500]	valid_0's l1: 0.793475
+  
+TabPFN requires a one-time license acceptance to download model weights for local inference.
+
+No display detected. Open this URL in a browser on another device:
+
+  https://ux.priorlabs.ai/login?hf_repo_id=tabpfn_3
+
+After logging in, accept the license on the Licenses tab,
+then copy your API Key from
+  https://ux.priorlabs.ai/account
+
+  [c] Copy URL to clipboard    Paste your API key to continue
+
+>
