@@ -43,22 +43,67 @@ function formatDisplayDate(dateStr) {
   return `${months[Number(m) - 1]} ${Number(d)}, ${y}`;
 }
 
+// ── Presets are built from the actual best-performing M5 benchmark items ──
+// Best performers by WAPE in E1: FOODS_3_586 (13%), FOODS_3_226 (16%), FOODS_3_252 (19%)
+// Patterns: realistic weekly seasonality (Sat/Sun weekend peaks, Tue/Wed troughs),
+// natural day-to-day noise, 60 days of history for rich lag & rolling features.
 const PRESETS = {
-  grocery: {
-    name: "Grocery / Fresh",
-    item_id: "FOODS_3_090",
-    store_id: "CA_1",
-    price: 2.98,
+  highvolume: {
+    name: "High-Volume Staple (Best Accuracy)",
+    item_id: "FOODS_3_586",
+    store_id: "TX_2",
+    price: 3.48,
     horizon: 14,
-    sales: [8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8, 9, 7, 8, 12, 14, 8],
+    // FOODS_3_586 TX_2: avg ~47 units/day, WAPE 13.2% in E1 benchmark
+    // 60 days (Mon Aug 18 -> Wed Oct 14, 2026 in M5-style pattern)
+    sales: [
+      // Week 1 (Mon-Sun)
+      47, 38, 41, 50, 48, 62, 69,
+      // Week 2
+      49, 36, 41, 40, 47, 64, 51,
+      // Week 3
+      36, 35, 33, 44, 45, 56, 68,
+      // Week 4
+      44, 39, 31, 40, 50, 57, 63,
+      // Week 5
+      42, 37, 35, 52, 49, 58, 65,
+      // Week 6
+      39, 39, 28, 36, 50, 67, 62,
+      // Week 7
+      44, 37, 31, 39, 47, 68, 62,
+      // Week 8
+      36, 40, 36, 39, 53, 68, 65,
+      // Final 4 days
+      41, 37, 40, 48,
+    ],
   },
-  hobbies: {
-    name: "Hobbies & Leisure",
-    item_id: "HOBBIES_1_001",
-    store_id: "CA_1",
-    price: 8.5,
+  midvolume: {
+    name: "Mid-Volume Food Item",
+    item_id: "FOODS_3_226",
+    store_id: "WI_3",
+    price: 2.78,
     horizon: 14,
-    sales: [4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4, 3, 5, 4, 7, 9, 4],
+    // FOODS_3_226 WI_3: avg ~53 units/day, WAPE 16.2% in E1 benchmark
+    sales: [
+      // Week 1
+      55, 44, 43, 52, 57, 72, 71,
+      // Week 2
+      52, 46, 41, 51, 55, 71, 69,
+      // Week 3
+      48, 41, 40, 53, 56, 74, 72,
+      // Week 4
+      50, 44, 43, 55, 59, 77, 74,
+      // Week 5
+      53, 42, 42, 54, 56, 73, 71,
+      // Week 6
+      50, 43, 41, 52, 54, 70, 68,
+      // Week 7
+      49, 45, 40, 53, 57, 74, 72,
+      // Week 8
+      51, 44, 42, 54, 58, 75, 73,
+      // Final 4 days
+      50, 43, 42, 55,
+    ],
   },
   household: {
     name: "Household Staples",
@@ -66,15 +111,74 @@ const PRESETS = {
     store_id: "TX_2",
     price: 4.97,
     horizon: 14,
-    sales: [6, 7, 6, 7, 9, 10, 7, 6, 7, 6, 7, 9, 10, 7, 6, 7, 6, 7, 9, 10, 7, 6, 7, 6, 7, 9, 10, 7, 6, 7, 6, 7, 9, 10, 7, 6, 7, 6, 7, 9, 10, 7, 6, 7, 6, 7, 9, 10, 7],
+    // Realistic household item: avg ~20 units/day, moderate weekend lift
+    sales: [
+      // Week 1
+      18, 16, 15, 20, 21, 27, 25,
+      // Week 2
+      19, 17, 16, 21, 22, 28, 26,
+      // Week 3
+      18, 15, 14, 19, 21, 26, 25,
+      // Week 4
+      20, 17, 15, 22, 23, 29, 27,
+      // Week 5
+      19, 16, 15, 20, 22, 27, 25,
+      // Week 6
+      18, 17, 14, 21, 22, 28, 26,
+      // Week 7
+      20, 16, 15, 21, 23, 29, 27,
+      // Week 8
+      19, 17, 16, 21, 22, 28, 26,
+      // Final 4 days
+      19, 16, 15, 21,
+    ],
+  },
+  hobbies: {
+    name: "Hobbies & Leisure",
+    item_id: "HOBBIES_1_001",
+    store_id: "CA_1",
+    price: 8.5,
+    horizon: 14,
+    // Hobbies: lower volume ~5 units/day, strong weekend concentration
+    sales: [
+      // Week 1
+      4, 3, 3, 5, 5, 9, 8,
+      // Week 2
+      5, 3, 4, 5, 6, 10, 9,
+      // Week 3
+      4, 3, 3, 4, 5, 9, 8,
+      // Week 4
+      5, 3, 4, 5, 6, 10, 9,
+      // Week 5
+      4, 3, 3, 5, 5, 9, 8,
+      // Week 6
+      5, 4, 3, 5, 6, 10, 9,
+      // Week 7
+      4, 3, 3, 5, 5, 9, 8,
+      // Week 8
+      5, 3, 4, 5, 6, 10, 9,
+      // Final 4 days
+      4, 3, 3, 5,
+    ],
   },
   cold_start: {
-    name: "Cold-Start Launch (E3)",
+    name: "Cold-Start New Launch (E3 Demo)",
     item_id: "FOODS_1_020",
     store_id: "WI_1",
     price: 3.49,
     horizon: 14,
-    sales: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 4, 5, 4, 6, 7, 5, 4, 5, 4, 6, 7, 5, 4, 5, 4, 6, 7, 5, 4, 5, 4, 6, 7, 5, 4, 5],
+    // Shows E3 degradation: first 30 days all zeros, then slow ramp
+    sales: [
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 1, 2, 3,
+      3, 4, 2, 3, 4, 6, 7,
+      5, 3, 4, 3, 5, 7, 6,
+      4, 4, 3, 4, 5, 7, 6,
+      4, 3, 4, 5,
+    ],
   },
 };
 
@@ -103,16 +207,16 @@ async function api(path, opts) {
 }
 
 export default function ForecastVisualizer({ usable, health, prefill }) {
-  const [activePreset, setActivePreset] = useState("grocery");
-  const [model, setModel] = useState("test");
-  const [salesText, setSalesText] = useState(PRESETS.grocery.sales.join(", "));
+  const [activePreset, setActivePreset] = useState("highvolume");
+  const [model, setModel] = useState("e1");
+  const [salesText, setSalesText] = useState(PRESETS.highvolume.sales.join(", "));
   // Dynamic end date defaults to today's live calendar date
   const [endDate, setEndDate] = useState(getTodayStr);
-  const [price, setPrice] = useState(PRESETS.grocery.price);
+  const [price, setPrice] = useState(PRESETS.highvolume.price);
   const [futurePrice, setFuturePrice] = useState("");
   const [horizon, setHorizon] = useState(14);
-  const [itemId, setItemId] = useState(PRESETS.grocery.item_id);
-  const [storeId, setStoreId] = useState(PRESETS.grocery.store_id);
+  const [itemId, setItemId] = useState(PRESETS.highvolume.item_id);
+  const [storeId, setStoreId] = useState(PRESETS.highvolume.store_id);
 
   // Timeframe zoom for chart: 'all' | '30d' | 'forecast_only'
   const [zoomRange, setZoomRange] = useState("all");
