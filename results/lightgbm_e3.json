@@ -1,0 +1,39 @@
+{
+  "model": "lightgbm",
+  "experiment": "e3",
+  "wape_mean": 0.9412450569940489,
+  "wape_std": 0.0,
+  "wape_ensemble": 0.9412450569940489,
+  "wapes_per_seed": [
+    0.9412450569940489
+  ],
+  "seeds": [
+    42
+  ],
+  "n_train": 245728,
+  "n_val": 117739,
+  "n_test": 495096,
+  "n_series_test": 1263,
+  "sample": null,
+  "runtime_sec": 29.2,
+  "config": {
+    "model": "lightgbm",
+    "seeds": [
+      42
+    ],
+    "early_stopping_rounds": 75,
+    "params": {
+      "objective": "regression_l1",
+      "n_estimators": 1500,
+      "learning_rate": 0.05,
+      "num_leaves": 127,
+      "min_child_samples": 50,
+      "feature_fraction": 0.8,
+      "bagging_fraction": 0.8,
+      "bagging_freq": 1,
+      "lambda_l2": 1.0,
+      "verbosity": -1
+    }
+  },
+  "timestamp": "2026-06-15 19:05:25"
+}

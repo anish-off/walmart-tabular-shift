@@ -1,0 +1,40 @@
+{
+  "model": "tabr",
+  "experiment": "e2",
+  "wape_mean": 0.6604570263328983,
+  "wape_std": 0.0,
+  "wape_ensemble": 0.6604570263328983,
+  "wapes_per_seed": [
+    0.6604570263328983
+  ],
+  "seeds": [
+    42
+  ],
+  "n_train": 29463759,
+  "n_val": 3608050,
+  "n_test": 11888998,
+  "n_series_test": 30490,
+  "sample": null,
+  "runtime_sec": 20576.7,
+  "config": {
+    "model": "tabr",
+    "seeds": [
+      42
+    ],
+    "params": {
+      "d_main": 96,
+      "context_size": 96,
+      "dropout": 0.1,
+      "lr": 0.0005,
+      "weight_decay": 1e-05,
+      "batch_size": 1024,
+      "max_epochs": 100,
+      "patience": 10,
+      "context_freeze_epoch": 4,
+      "train_subsample": 500000,
+      "candidate_chunk": 65536,
+      "device": "cuda"
+    }
+  },
+  "timestamp": "2026-06-17 23:41:49"
+}

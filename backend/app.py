@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from shift_study.features import FEATURES, add_features
@@ -28,7 +29,25 @@ EXPS = ("e1", "e2", "e3", "test")
 MIN_HISTORY = 36          # lag_35 plus the target day
 MAX_ROWS = 300_000
 
-app = FastAPI(title="Shift study inference")
+app = FastAPI(title="Walmart Tabular Shift Inference API")
+
+# Enable CORS for Vercel, localhost, and all origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": "Walmart Tabular Shift Inference Engine",
+        "endpoints": ["/api/health", "/api/forecast", "/api/score", "/docs"],
+    }
 
 # Label codes the M5 training run produced (alphabetical category codes).
 # item_id has 3,049 values and no catalogue ships with the repo, so it maps to 0.

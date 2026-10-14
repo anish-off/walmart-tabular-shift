@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { API_BASE } from "./config.js";
 import {
   Area,
   AreaChart,
@@ -90,10 +91,10 @@ const fmtCurrency = (x) =>
 async function api(path, opts) {
   let res;
   try {
-    res = await fetch(path, opts);
+    res = await fetch(`${API_BASE}${path}`, opts);
   } catch {
     throw new Error(
-      "Backend API unreachable on port 8000. Start it with: .venv\\Scripts\\python -m uvicorn app:app --app-dir backend --port 8000"
+      "Backend API unreachable. Ensure backend is running or check connection."
     );
   }
   const body = await res.json().catch(() => ({}));

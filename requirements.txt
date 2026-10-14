@@ -13,3 +13,6 @@ pyyaml
 tabulate
 kaggle
 pytest
+fastapi
+uvicorn
+python-multipart

@@ -1,0 +1,37 @@
+{
+  "model": "xgboost",
+  "experiment": "e2",
+  "wape_mean": 0.6499921935637529,
+  "wape_std": 0.0,
+  "wape_ensemble": 0.6499921935637529,
+  "wapes_per_seed": [
+    0.6499921935637529
+  ],
+  "seeds": [
+    42
+  ],
+  "n_train": 29463759,
+  "n_val": 3608050,
+  "n_test": 11888998,
+  "n_series_test": 30490,
+  "sample": null,
+  "runtime_sec": 3485.1,
+  "config": {
+    "model": "xgboost",
+    "seeds": [
+      42
+    ],
+    "early_stopping_rounds": 50,
+    "params": {
+      "n_estimators": 1000,
+      "learning_rate": 0.05,
+      "max_depth": 7,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "min_child_weight": 10,
+      "tree_method": "hist",
+      "objective": "reg:absoluteerror"
+    }
+  },
+  "timestamp": "2026-06-15 18:02:55"
+}

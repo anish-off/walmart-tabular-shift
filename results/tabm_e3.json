@@ -1,0 +1,38 @@
+{
+  "model": "tabm",
+  "experiment": "e3",
+  "wape_mean": 0.91541390061368,
+  "wape_std": 0.0,
+  "wape_ensemble": 0.91541390061368,
+  "wapes_per_seed": [
+    0.91541390061368
+  ],
+  "seeds": [
+    42
+  ],
+  "n_train": 245728,
+  "n_val": 117739,
+  "n_test": 495096,
+  "n_series_test": 1263,
+  "sample": null,
+  "runtime_sec": 81.3,
+  "config": {
+    "model": "tabm",
+    "seeds": [
+      42
+    ],
+    "params": {
+      "d_main": 512,
+      "k": 8,
+      "n_blocks": 3,
+      "dropout": 0.0,
+      "lr": 0.001,
+      "weight_decay": 1e-05,
+      "batch_size": 16384,
+      "max_epochs": 200,
+      "patience": 20,
+      "device": "cuda"
+    }
+  },
+  "timestamp": "2026-06-19 20:17:39"
+}

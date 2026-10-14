@@ -1,0 +1,43 @@
+{
+  "model": "tabpfn",
+  "experiment": "e3",
+  "wape_mean": 1.0068875975927267,
+  "wape_std": 0.007657863385059676,
+  "wape_ensemble": 1.0068407282629492,
+  "wapes_per_seed": [
+    0.994198716251265,
+    1.0112493129175615,
+    1.0085020328063639,
+    1.0168789200164206,
+    1.003609005972022
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "n_train": 245728,
+  "n_val": 117739,
+  "n_test": 495096,
+  "n_series_test": 1263,
+  "sample": null,
+  "runtime_sec": 1034.2,
+  "config": {
+    "model": "tabpfn",
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "params": {
+      "context_rows": 8000,
+      "predict_chunk": 50000,
+      "device": "cuda"
+    }
+  },
+  "timestamp": "2026-06-19 05:02:44"
+}

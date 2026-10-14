@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { API_BASE } from "./config.js";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const EXP_LABEL = {
@@ -20,9 +21,9 @@ const fmtNum = (x, d = 2) =>
 async function api(path, opts) {
   let res;
   try {
-    res = await fetch(path, opts);
+    res = await fetch(`${API_BASE}${path}`, opts);
   } catch {
-    throw new Error("Cannot reach model API. Start backend with: .venv\\Scripts\\python -m uvicorn app:app --app-dir backend --port 8000");
+    throw new Error("Cannot reach model API. Ensure backend service is running.");
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "The request failed (" + res.status + ").");

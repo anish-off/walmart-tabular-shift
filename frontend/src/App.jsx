@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { API_BASE } from "./config.js";
 import ForecastVisualizer from "./ForecastVisualizer.jsx";
 import ScoreCsv from "./ScoreCsv.jsx";
 import {
@@ -87,7 +88,7 @@ export default function App() {
       .then(setData)
       .catch((e) => console.warn("data.json not loaded yet:", e));
 
-    fetch("/api/health")
+    fetch(`${API_BASE}/api/health`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then(setHealth)
       .catch(() => setHealth({ unreachable: true }));
